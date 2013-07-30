@@ -4,6 +4,9 @@ Created on June, 29 2013
 @author: Nadejda Blagorodnova <nblago@ast.cam.ac.uk>
 
 Util class to transform between Gaia and other Photometric systems.
+Coefficients used from Jordi et. al. 2010.
+
+This transformations are created for different values of extinction for stars of different spectral types.
 
 '''
 import numpy as np
