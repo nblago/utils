@@ -30,13 +30,16 @@ def deg2hour(ra, dec, sep=":"):
     
 def hour2deg(ra, dec):
     
-    if ( type(ra) is float and type(dec) is float ):
-        return ra, dec
+    try:
         
-    c = SkyCoord(ra, dec, frame='icrs', unit=(u.hourangle, u.deg))
-    
-    ra = c.ra.deg
-    dec = c.dec.deg
+        ra = float(ra)
+        dec = float(dec)
+        
+    except:
+        c = SkyCoord(ra, dec, frame='icrs', unit=(u.hourangle, u.deg))
+        
+        ra = c.ra.deg
+        dec = c.dec.deg
     
     return ra, dec
 
@@ -52,7 +55,7 @@ def get_offset(ra1, dec1, ra2, dec2):
     '''
 
     ra1, dec1 = hour2deg(ra1, dec1)
-    ra2, dec2 = hour2deg(ra2, dec2)
+    ra2, dec2 = hour2deg(ra2, dec2)   
     
     return np.round((ra2 - ra1) * np.cos(np.deg2rad(dec1))*3600,2), np.round((dec2-dec1)*3600, 2)
     
@@ -105,8 +108,8 @@ def get_cutout(ra, dec, name, rad, debug=True):
 
     
     # Construct URL to download DSS image cutout, and save to tmp.fits
-    image_index_url_red = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=i'.format(ra, dec)
-    image_index_url_green = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=r'.format(ra, dec)
+    image_index_url_red = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=y'.format(ra, dec)
+    image_index_url_green = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=i'.format(ra, dec)
     image_index_url_blue = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=g'.format(ra, dec)
 
     urllib.urlretrieve(image_index_url_red, '/tmp/image_index_red.txt')
@@ -117,7 +120,7 @@ def get_cutout(ra, dec, name, rad, debug=True):
     ix_green = np.genfromtxt('/tmp/image_index_green.txt', names=True, dtype=None)
     ix_blue = np.genfromtxt('/tmp/image_index_blue.txt', names=True, dtype=None)
     
-    image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red=%s&green=%s&blue=%s&filetypes=stack&auxiliary=data&size=%d&ra=%.6f&dec=%.6f"%\
+    image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red=%s&green=%s&blue=%s&filetypes=stack&auxiliary=data&size=%d&ra=%.6f&dec=%.6f&output_size=256"%\
     (ix_red["filename"], ix_green["filename"], ix_blue["filename"], rad*3600*4, ra, dec)
 
     if (debug):
@@ -134,7 +137,6 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
         dec=float(dec)
     except:
         ra, dec = hour2deg(ra, dec) 
-
 
     catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
     
@@ -159,6 +161,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
     no_self_object = (np.abs(catalog["ra"]-ra)*np.cos(np.deg2rad(dec))>2./3600)*(np.abs(catalog["dec"]-dec)>2./3600)
     catalog = catalog[no_self_object]
     
+    print (catalog)
     
     # Construct URL to download DSS image cutout, and save to tmp.fits
     image_index_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=r'.format(ra, dec)
