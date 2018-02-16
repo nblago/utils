@@ -144,7 +144,35 @@ def get_cutout(ra, dec, name, rad, debug=True):
 def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=False, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan):
     '''
     Creates a PDF with the finder chart for the object with the specified name and coordinates.
-    It queries the PS1 catalogue to obtain nearby offset stars.
+    It queries the PS1 catalogue to obtain nearby offset stars and get an R-band image as background.
+    
+    Parameters
+    ----------
+    ra : float
+        RA of our target in degrees.
+    dec : float
+        DEC of our target in degrees.
+    rad : float
+        Search radius for the finder in degrees.
+    debug : bool (optional)
+        Option to activate/ deactivate additional output.
+    starlist : str (optional)
+        Path/name of the file where the coordinates for the object are going to be saved. 
+        If the file exists, the content will be appended at the end.
+        If no value is provided, the output just writes to the standard output (in case print_starlist is True).
+    print_starlist : boolean (optional)
+        Indicates if the starlist shall be printed in the standard output.
+    telescope : str (optional)
+        The current two values accepted are "Keck" and "P200".
+    directory : str (optional)
+        The directory where the PDF with the finder chart shall be stored. 
+        If no value given, the file will be store in the current directory where the script is run.
+    minmag : float (optional)
+        The minimum magnitud (brightest in this case) star that we would like to use as an offset star.
+    maxmag : float (optional)
+        The maximum magnitude (faintest) star that we would like to use as an offset star.
+    mag : float or `None` (optional)
+        The magnitude of our target.
     '''
         
     try:
