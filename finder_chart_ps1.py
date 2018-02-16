@@ -1,5 +1,14 @@
 from __future__ import print_function
-import sys, urllib
+
+try:
+    # For Python 3.0 and later
+    from urllib.request import urlopen
+    from urllib.request import urlretrieve
+except ImportError:
+    # Fall back to Python 2's urllib2
+    from urllib2 import urlopen
+    from urllib import urlretrieve
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import pylab 
@@ -31,7 +40,6 @@ def deg2hour(ra, dec, sep=":"):
 def hour2deg(ra, dec):
     
     try:
-        
         ra = float(ra)
         dec = float(dec)
         
@@ -45,8 +53,6 @@ def hour2deg(ra, dec):
 
 
 def get_offset(ra1, dec1, ra2, dec2):
-
-
     '''
     Returns offset from ra1, dec1 position to ra2, dec2.
     
@@ -68,9 +74,15 @@ def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
         
     url = "http://gsss.stsci.edu/webservices/vo/CatalogSearch.aspx?CAT=PS1V3OBJECTS&RA=%.5f&DEC=%.5f&SR=%.5f"%(ra, dec, radius_deg)
     
-    u = urllib.urlopen(url)
+    ur = urlopen(url)
     f = open("/tmp/ps1_cat.xml", "w")
-    f.writelines(u.readlines())
+    all_lines = ur.readlines()
+    try:
+        f.writelines(all_lines)
+    except:
+        mylines = [str(line, 'utf-8') for line in all_lines]
+        f.writelines(mylines)
+        
     f.close()
     
     # Read RA, Dec and magnitude from XML format USNO catalog
@@ -112,9 +124,9 @@ def get_cutout(ra, dec, name, rad, debug=True):
     image_index_url_green = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=i'.format(ra, dec)
     image_index_url_blue = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=g'.format(ra, dec)
 
-    urllib.urlretrieve(image_index_url_red, '/tmp/image_index_red.txt')
-    urllib.urlretrieve(image_index_url_green, '/tmp/image_index_green.txt')
-    urllib.urlretrieve(image_index_url_blue, '/tmp/image_index_blue.txt')
+    urlretrieve(image_index_url_red, '/tmp/image_index_red.txt')
+    urlretrieve(image_index_url_green, '/tmp/image_index_green.txt')
+    urlretrieve(image_index_url_blue, '/tmp/image_index_blue.txt')
 
     ix_red = np.genfromtxt('/tmp/image_index_red.txt', names=True, dtype=None)
     ix_green = np.genfromtxt('/tmp/image_index_green.txt', names=True, dtype=None)
@@ -126,11 +138,14 @@ def get_cutout(ra, dec, name, rad, debug=True):
     if (debug):
         print (image_url)
         print ("Downloading PS1 r-band image...")
-    urllib.urlretrieve(image_url, '/tmp/tmp_%s.jpg'%name)
+    urlretrieve(image_url, '/tmp/tmp_%s.jpg'%name)
     
     
-def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan):
-
+def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=False, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan):
+    '''
+    Creates a PDF with the finder chart for the object with the specified name and coordinates.
+    It queries the PS1 catalogue to obtain nearby offset stars.
+    '''
         
     try:
         ra=float(ra)
@@ -139,17 +154,19 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
         ra, dec = hour2deg(ra, dec) 
 
     catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
+    catalog.sort(order='mag')
     
     if (debug):
         print (catalog)
 
     
     if (len(catalog)<2):
+        if debug: print ("Looking for a bit fainter stars up to mag: %.2f"%(maxmag+0.25))
         catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag+0.5)
 
     if (len(catalog)<2):
-        print ("Restarting with larger radius %.2f arcmin"%(rad*1.5*60))
-        get_finder(ra, dec, name, rad*1.5, directory=directory, minmag=minmag, maxmag=maxmag+0.5, mag=mag, starlist=starlist, telescope=telescope)
+        print ("Restarting with larger radius %.2f arcmin"%(rad*60+0.5))
+        get_finder(ra, dec, name, rad+0.5/60, directory=directory, minmag=minmag, maxmag=maxmag+0.5, mag=mag, starlist=starlist, telescope=telescope)
         return
         
     if (not catalog is None and len(catalog)>0):
@@ -161,11 +178,11 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
     no_self_object = (np.abs(catalog["ra"]-ra)*np.cos(np.deg2rad(dec))>2./3600)*(np.abs(catalog["dec"]-dec)>2./3600)
     catalog = catalog[no_self_object]
     
-    print (catalog)
+    if (debug): print (catalog)
     
     # Construct URL to download DSS image cutout, and save to tmp.fits
     image_index_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=r'.format(ra, dec)
-    urllib.urlretrieve(image_index_url, '/tmp/image_index.txt')
+    urlretrieve(image_index_url, '/tmp/image_index.txt')
     ix = np.genfromtxt('/tmp/image_index.txt', names=True, dtype=None)
     
     image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red=%s&format=fits&size=%d&ra=%.6f&dec=%.6f"%(ix["filename"], rad*3600 *4, ra, dec)
@@ -173,7 +190,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
     if (debug):
         print (image_url)
         print ("Downloading PS1 r-band image...")
-    urllib.urlretrieve(image_url, '/tmp/tmp.fits')
+    urlretrieve(image_url, '/tmp/tmp.fits')
     
     try:
         ps1_image = fits.open("/tmp/tmp.fits")
@@ -181,11 +198,11 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
     except IOError:
         try:
             image_url = 'http://archive.eso.org/dss/dss/image?ra=%.5f&dec=%.5f&x=%.2f&y=%.2f&Sky-Survey=DSS1&mime-type=download-fits' % ((ra), (dec), (rad*60), (rad*60))
-            print ("Downloading DSS image...")
-            urllib.urlretrieve(image_url, '/tmp/tmp.fits')
+            if debug: print ("Downloading DSS image...")
+            urlretrieve(image_url, '/tmp/tmp.fits')
         except:
             image_url = 'http://archive.stsci.edu/cgi-bin/dss_search?ra=%.6f&dec=%.6f&generation=DSS2r&equinox=J2000&height=%.4f&width=%.4f&format=FITS' % (ra, dec, rad*60, rad*60)
-            urllib.urlretrieve(image_url, '/tmp/tmp.fits')
+            urlretrieve(image_url, '/tmp/tmp.fits')
         
         ps1_image = fits.open("/tmp/tmp.fits")
     
@@ -261,25 +278,30 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
     
     # List coords, mag of references etc
     plt.text(1.02, 0.85, name, transform=plt.axes().transAxes, fontweight='bold')
-    plt.text(1.02, 0.80, "mag=%.1f"%mag, transform=plt.axes().transAxes, fontweight='bold')
+    #plt.text(1.02, 0.80, "mag=%.1f"%mag, transform=plt.axes().transAxes, fontweight='bold')
     plt.text(1.02, 0.75, "%.5f %.5f"%(ra, dec),transform=plt.axes().transAxes)
     rah, dech = deg2hour(ra, dec)
     plt.text(1.02, 0.7,rah+"  "+dech, transform=plt.axes().transAxes)
 
     # Save to pdf
     pylab.savefig(os.path.join(directory, str(name+'_finder.pdf')))
-    print ("Saved to %s"%os.path.join(directory, str(name+'_finder.pdf')))
+    if debug: print ("Saved to %s"%os.path.join(directory, str(name+'_finder.pdf')))
     pylab.close("all")
     
     #Print starlist
-    if (len(catalog)>0):
-        print ( "{0} {1} {2}  2000.0 # ".format(name.ljust(20), *deg2hour(ra, dec, sep=" ")) )
+    if telescope == "Keck":
+        commentchar = "#"
+    else:
+        commentchar = "!"
+        
+    if (len(catalog)>0 and print_starlist):
+        print ( "{0} {2} {3}  2000.0 {1} ".format(name.ljust(20), commentchar, *deg2hour(ra, dec, sep=" ") ) )
         S1 = deg2hour(catalog["ra"][0], catalog["dec"][0], sep=" ")
-        print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # ".format( (name+"_R1").ljust(20), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0]))
+        print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R1").ljust(20), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0], commentchar))
     
-    if (len(catalog)>1):
+    if (len(catalog)>1 and print_starlist):
         S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=" ")
-        print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # ".format( (name+"_R2").ljust(20), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
+        print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R2").ljust(20), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
 
 
     if not np.isnan(mag):
@@ -295,7 +317,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
             if (len(catalog)>1):
                 f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"R2").ljust(17), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
             f.write('\n')
-    else:
+    elif (starlist is None) and print_starlist and (telescope =="Keck"):
         print (starlist, telescope)
 
     if (not starlist is None) and (telescope =="P200"):
@@ -305,7 +327,9 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, telescope="P200",
                 f.write ( "{:s} {:s}  {:s}  2000.0 ! raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"_S1").ljust(19), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0]))
             if (len(catalog)>1):
                 f.write ( "{:s} {:s}  {:s}  2000.0 ! raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"_S2").ljust(19), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
-            f.write('\n')        
+            f.write('\n')     
+    elif (starlist is None) and print_starlist and (telescope =="P200"):
+        print (starlist, telescope)
 
 
 if __name__ == '__main__':
@@ -314,7 +338,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=\
         '''
 
-        Computes the zeropoints for all the images in the folder.
+        Creates the finder chart for the given RA, DEC and NAME.
+        
+        Usage: finder.py <RA> <Dec> <Name>  <rad> <telescope>
             
         ''', formatter_class=argparse.RawTextHelpFormatter)
         
@@ -329,7 +355,7 @@ if __name__ == '__main__':
     name=str(sys.argv[3])
     if (len(sys.argv)>=5):
         rad = float(sys.argv[4])
-        if (rad > 10./60):
+        if (rad > 30./60):
             print ('Search radius larger than 30 arcmin. Not sure why you need such a large finder chart... reducing to 10 armin for smoother operations...')
             rad = 10./60
     else:
