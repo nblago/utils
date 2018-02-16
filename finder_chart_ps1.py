@@ -345,8 +345,6 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Fa
             if (len(catalog)>1):
                 f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"R2").ljust(17), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
             f.write('\n')
-    elif (starlist is None) and print_starlist and (telescope =="Keck"):
-        print (starlist, telescope)
 
     if (not starlist is None) and (telescope =="P200"):
         with open(starlist, "a") as f:
@@ -356,8 +354,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Fa
             if (len(catalog)>1):
                 f.write ( "{:s} {:s}  {:s}  2000.0 ! raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"_S2").ljust(19), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
             f.write('\n')     
-    elif (starlist is None) and print_starlist and (telescope =="P200"):
-        print (starlist, telescope)
+
 
 
 if __name__ == '__main__':
