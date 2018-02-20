@@ -52,7 +52,7 @@ def hour2deg(ra, dec):
     return ra, dec
 
 
-def get_offset(ra1, dec1, ra2, dec2):
+def get_offset_old(ra1, dec1, ra2, dec2):
     '''
     Returns offset from ra1, dec1 position to ra2, dec2.
     
@@ -64,6 +64,15 @@ def get_offset(ra1, dec1, ra2, dec2):
     ra2, dec2 = hour2deg(ra2, dec2)   
     
     return np.round((ra2 - ra1) * np.cos(np.deg2rad(dec1))*3600,2), np.round((dec2-dec1)*3600, 2)
+
+
+def get_offset(ra1, dec1, ra2, dec2):
+    from astropy.coordinates import SkyCoord
+    bright_star = SkyCoord(ra1, dec1, frame='icrs', unit=(u.deg, u.deg))
+    target = SkyCoord(ra2, dec2, frame='icrs', unit=(u.deg, u.deg))
+    dra, ddec = bright_star.spherical_offsets_to(target)
+    
+    return dra.to(u.arcsec).value, ddec.to(u.arcsec).value
     
 def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     '''
@@ -321,12 +330,12 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Fa
     else:
         commentchar = "!"
         
-    if (len(catalog)>0 and print_starlist):
+    if (len(catalog)>0 and (print_starlist or not starlist is None)):
         print ( "{0} {2} {3}  2000.0 {1} ".format(name.ljust(20), commentchar, *deg2hour(ra, dec, sep=" ") ) )
         S1 = deg2hour(catalog["ra"][0], catalog["dec"][0], sep=" ")
         print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R1").ljust(20), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0], commentchar))
     
-    if (len(catalog)>1 and print_starlist):
+    if (len(catalog)>1 and (print_starlist or not starlist is None)):
         S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=" ")
         print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R2").ljust(20), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
 
