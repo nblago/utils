@@ -4,6 +4,7 @@ try:
     # For Python 3.0 and later
     from urllib.request import urlopen
     from urllib.request import urlretrieve
+    from urllib import request
 except ImportError:
     # Fall back to Python 2's urllib2
     from urllib2 import urlopen
@@ -14,10 +15,10 @@ import matplotlib.pyplot as plt
 import pylab 
 from matplotlib.ticker import MaxNLocator
 import argparse
-from astropy.io import votable
 import os
 import astropy.wcs
 from astropy.io import fits
+from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from scipy.ndimage.filters import gaussian_filter
@@ -25,6 +26,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def deg2hour(ra, dec, sep=":"):
+    '''
+    Transforms the coordinates in degrees into HH:MM:SS DD:MM:SS with the requested separator.
+    '''
     
     if ( type(ra) is str and type(dec) is str ):
         return ra, dec
@@ -38,7 +42,9 @@ def deg2hour(ra, dec, sep=":"):
     
     
 def hour2deg(ra, dec):
-    
+    '''
+    Transforms string HH:MM:SS DD:MM:SS coordinates into degrees (floats).
+    '''
     try:
         ra = float(ra)
         dec = float(dec)
@@ -52,21 +58,12 @@ def hour2deg(ra, dec):
     return ra, dec
 
 
-def get_offset_old(ra1, dec1, ra2, dec2):
-    '''
-    Returns offset from ra1, dec1 position to ra2, dec2.
-    
-    returns ( East Offset [arcsec], 	North Offset [arcsec] )
-
-    '''
-
-    ra1, dec1 = hour2deg(ra1, dec1)
-    ra2, dec2 = hour2deg(ra2, dec2)   
-    
-    return np.round((ra2 - ra1) * np.cos(np.deg2rad(dec1))*3600,2), np.round((dec2-dec1)*3600, 2)
-
-
 def get_offset(ra1, dec1, ra2, dec2):
+    '''
+    Computes the offset in arcsec between two coordinates.
+    The offset is from (ra1, dec1) - generally an offset star to (ra2, dec2) - the fainter target.
+    '''
+    
     from astropy.coordinates import SkyCoord
     bright_star = SkyCoord(ra1, dec1, frame='icrs', unit=(u.deg, u.deg))
     target = SkyCoord(ra2, dec2, frame='icrs', unit=(u.deg, u.deg))
@@ -77,45 +74,46 @@ def get_offset(ra1, dec1, ra2, dec2):
 def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     '''
     Sends a VO query to the PS1 catalogue.
-    Filters the result by mangitude.
+    Filters the result by mangitude (between 15 and 18.5)
+    and by the PSF-like shape of the sources.
     '''
 
         
-    url = "http://gsss.stsci.edu/webservices/vo/CatalogSearch.aspx?CAT=PS1V3OBJECTS&RA=%.5f&DEC=%.5f&SR=%.5f"%(ra, dec, radius_deg)
+    url = "http://gsss.stsci.edu/webservices/vo/CatalogSearch.aspx?CAT=PS1V3OBJECTS&RA=%.5f&DEC=%.5f&SR=%.5f&FORMAT=csv"%(ra, dec, radius_deg)
+    #urllib.urlretrieve(url, "/tmp/ps1_cat.xml") 
     
-    ur = urlopen(url)
-    f = open("/tmp/ps1_cat.xml", "w")
-    all_lines = ur.readlines()
+    f = open("/tmp/ps1_cat.csv", "wb")
+    
     try:
-        f.writelines(all_lines)
+        page = request.urlopen(url)
     except:
-        mylines = [str(line, 'utf-8') for line in all_lines]
-        f.writelines(mylines)
-        
-    f.close()
-    
-    # Read RA, Dec and magnitude from XML format USNO catalog
-    catalog = votable.parse_single_table("/tmp/ps1_cat.xml").to_table()
-    
-    #print (catalog["gMeanPSFMag"], catalog["rMeanPSFMag"])
-    
-    #mask = (catalog["nDetections"]>4) * ((catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag)) | ((catalog["gMeanPSFMag"] > minmag) * (catalog["gMeanPSFMag"] < maxmag))
+        page = urlopen(url)
 
-    mask = (catalog["nDetections"]>4) * (catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) #*(catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) 
+    content = page.read()
+    f.write(content)
+    f.close()
+
+    # Read RA, Dec and magnitude from CSV 
+    catalog = Table.read("/tmp/ps1_cat.csv", format="ascii.csv", header_start=1)
+
+    mask = (catalog["nDetections"]>4) * (catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) *\
+    (catalog["iMeanPSFMag"] - catalog["iMeanKronMag"] < 0.05) #This last one to select stars.
+    
+    #*(catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) 
     catalog = catalog[mask]
 
     
     newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
-    newcat["ra"] = catalog["RAmean"]
-    newcat["dec"] = catalog["DECmean"]
+    newcat["ra"] = catalog["raMean"]
+    newcat["dec"] = catalog["decMean"]
     newcat["mag"] = catalog["rMeanPSFMag"]
     
-    #print (newcat)
-
     return newcat
 
 def get_cutout(ra, dec, name, rad, debug=True):
-    
+    '''
+    Obtains the color composite cutout from the PS1 images.
+    '''
     try:
         ra=float(ra)
         dec=float(dec)
@@ -150,7 +148,7 @@ def get_cutout(ra, dec, name, rad, debug=True):
     urlretrieve(image_url, '/tmp/tmp_%s.jpg'%name)
     
     
-def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=False, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan):
+def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=True, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan):
     '''
     Creates a PDF with the finder chart for the object with the specified name and coordinates.
     It queries the PS1 catalogue to obtain nearby offset stars and get an R-band image as background.
@@ -263,7 +261,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Fa
     plt.set_cmap('gray_r')
     smoothedimage = gaussian_filter(ps1_image[0].data, 1.5)
     plt.imshow(smoothedimage,origin='lower',vmin=np.percentile(ps1_image[0].data.flatten(), 10), \
-    vmax=np.percentile(ps1_image[0].data.flatten(), 98.8))
+    vmax=np.percentile(ps1_image[0].data.flatten(), 99.0))
     
     # Mark target
     plt.plot([target_pix[0,0]+15,(target_pix[0,0]+10)],[target_pix[0,1],(target_pix[0,1])], 'g-', lw=2)
@@ -301,23 +299,31 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Fa
     
     # Set size of window (leaving space to right for ref star coords)
     plt.subplots_adjust(right=0.65,left=0.05, top=0.99, bottom=0.05)
-    #plt.tight_layout()
     
-    if (len(catalog)>0):
-        ofR1 = get_offset(catalog["ra"][0], catalog["dec"][0], ra, dec)
-        plt.text(1.02, 0.60,'R1, mag=%.2f'%catalog["mag"][0], transform=plt.axes().transAxes, color="b")
-        plt.text(1.02, 0.55,"E: %.2f N: %.2f"%(ofR1[0], ofR1[1]),transform=plt.axes().transAxes, color="b")
-    if (len(catalog)>1):
-        ofR2 = get_offset(catalog["ra"][1], catalog["dec"][1], ra, dec)
-        plt.text(1.02, 0.45,'R2, mag=%.2f'%catalog["mag"][1], transform=plt.axes().transAxes, color="r")
-        plt.text(1.02, 0.4,"E: %.2f N: %.2f"%(ofR2[0], ofR2[1]),transform=plt.axes().transAxes, color="r")
-    
-    # List coords, mag of references etc
+    # List name, coords, mag of references etc
     plt.text(1.02, 0.85, name, transform=plt.axes().transAxes, fontweight='bold')
     #plt.text(1.02, 0.80, "mag=%.1f"%mag, transform=plt.axes().transAxes, fontweight='bold')
     plt.text(1.02, 0.75, "%.5f %.5f"%(ra, dec),transform=plt.axes().transAxes)
     rah, dech = deg2hour(ra, dec)
     plt.text(1.02, 0.7,rah+"  "+dech, transform=plt.axes().transAxes)
+    
+    #Put the text for the offset stars.
+    if (len(catalog)>0):
+        ofR1 = get_offset(catalog["ra"][0], catalog["dec"][0], ra, dec)
+        S1 = deg2hour(catalog["ra"][0], catalog["dec"][0], sep=":")
+
+        plt.text(1.02, 0.60,'R1, mag=%.2f'%catalog["mag"][0], transform=plt.axes().transAxes, color="b")
+        plt.text(1.02, 0.55,'%s %s'%(S1[0], S1[1]), transform=plt.axes().transAxes, color="b")
+        plt.text(1.02, 0.5,"E: %.2f N: %.2f"%(ofR1[0], ofR1[1]),transform=plt.axes().transAxes, color="b")
+
+    if (len(catalog)>1):
+        ofR2 = get_offset(catalog["ra"][1], catalog["dec"][1], ra, dec)
+        S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=":")
+
+        plt.text(1.02, 0.4,'R2, mag=%.2f'%catalog["mag"][1], transform=plt.axes().transAxes, color="r")
+        plt.text(1.02, 0.35,'%s %s'%(S2[0], S2[1]), transform=plt.axes().transAxes, color="r")
+        plt.text(1.02, 0.3,"E: %.2f N: %.2f"%(ofR2[0], ofR2[1]),transform=plt.axes().transAxes, color="r")
+    
 
     # Save to pdf
     pylab.savefig(os.path.join(directory, str(name+'_finder.pdf')))
@@ -393,6 +399,10 @@ if __name__ == '__main__':
             rad = 10./60
     else:
         rad = 2./60
+        
+    print ('Using search radius of %.1f arcsec.'%(rad*3600))
+
+        
     if (len(sys.argv)>5):
         telescope = sys.argv[5]
     else:
