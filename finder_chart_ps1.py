@@ -333,17 +333,19 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     #Print starlist
     if telescope == "Keck":
         commentchar = "#"
+        separator = ""
     else:
         commentchar = "!"
+        separator = "!"
         
     if (len(catalog)>0 and (print_starlist or not starlist is None)):
         print ( "{0} {2} {3}  2000.0 {1} ".format(name.ljust(20), commentchar, *deg2hour(ra, dec, sep=" ") ) )
         S1 = deg2hour(catalog["ra"][0], catalog["dec"][0], sep=" ")
-        print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R1").ljust(20), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0], commentchar))
+        print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R1").ljust(20), S1[0], S1[1], separator, ofR1[0], ofR1[1], catalog["mag"][0], commentchar))
     
     if (len(catalog)>1 and (print_starlist or not starlist is None)):
         S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=" ")
-        print ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R2").ljust(20), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
+        print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R2").ljust(20), S2[0], S2[1], separator, ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
 
 
     if not np.isnan(mag):
