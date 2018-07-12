@@ -217,13 +217,15 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     # Construct URL to download DSS image cutout, and save to tmp.fits
     image_index_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=r'.format(ra, dec)
     urlretrieve(image_index_url, '/tmp/image_index.txt')
-    ix = np.genfromtxt('/tmp/image_index.txt', names=True, dtype=None)
+    #ix = np.genfromtxt('/tmp/image_index.txt', names=True, dtype='str')
+    ix = Table.read('/tmp/image_index.txt', format="ascii")
+    f = ix['filename'].data[0]
     
-    image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red=%s&format=fits&size=%d&ra=%.6f&dec=%.6f"%(ix["filename"], rad*3600 *4, ra, dec)
-
+    image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red={0}&format=fits&size={1}&ra={2}&dec={3}".format(f, int(np.round(rad*3600*4, 0)), ra, dec)
     if (debug):
-        print (image_url)
+        print ("URL:", image_url)
         print ("Downloading PS1 r-band image...")
+        
     urlretrieve(image_url, '/tmp/tmp.fits')
     
     try:
@@ -341,11 +343,11 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     if (len(catalog)>0 and (print_starlist or not starlist is None)):
         print ( "{0} {2} {3}  2000.0 {1} ".format(name.ljust(20), commentchar, *deg2hour(ra, dec, sep=" ") ) )
         S1 = deg2hour(catalog["ra"][0], catalog["dec"][0], sep=" ")
-        print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R1").ljust(20), S1[0], S1[1], separator, ofR1[0], ofR1[1], catalog["mag"][0], commentchar))
+        print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_S1").ljust(20), S1[0], S1[1], separator, ofR1[0], ofR1[1], catalog["mag"][0], commentchar))
     
     if (len(catalog)>1 and (print_starlist or not starlist is None)):
         S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=" ")
-        print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_R2").ljust(20), S2[0], S2[1], separator, ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
+        print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_S2").ljust(20), S2[0], S2[1], separator, ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
 
 
     if not np.isnan(mag):
@@ -357,9 +359,9 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         with open(starlist, "a") as f:
             f.write( "{0} {1} {2}  2000.0 #".format(name.ljust(17), *deg2hour(ra, dec, sep=" ")) + "%s \n"%rmag ) 
             if (len(catalog)>0):
-                f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"R1").ljust(17), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0]))
+                f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"_S1").ljust(17), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0]))
             if (len(catalog)>1):
-                f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"R2").ljust(17), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
+                f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"_S2").ljust(17), S2[0], S2[1], ofR2[0], ofR2[1], catalog["mag"][1]))
             f.write('\n')
 
     if (not starlist is None) and (telescope =="P200"):
@@ -381,14 +383,14 @@ if __name__ == '__main__':
 
         Creates the finder chart for the given RA, DEC and NAME.
         
-        Usage: finder.py <RA> <Dec> <Name>  <rad> <telescope>
+        Usage: finder.py <RA> <Dec> <Name> <rad [deg]> <telescope [P200|Keck]>
             
         ''', formatter_class=argparse.RawTextHelpFormatter)
         
         
     #Check if correct number of arguments are given
     if len(sys.argv) < 4:
-    	print ("Usage: finder.py <RA> <Dec> <Name>  <rad> <telescope>")
+    	print ("Usage: finder.py <RA> <Dec> <Name>  <rad [deg]> <telescope [P200|Keck]>")
     	sys.exit()
      
     ra=sys.argv[1]
@@ -412,5 +414,5 @@ if __name__ == '__main__':
         print ('Assuming that the telescope you observe will be P200. If it is "Keck", please specify otherwise.')
 
     
-    get_finder(ra, dec, name, rad, telescope=telescope, debug=False)
+    get_finder(ra, dec, name, rad, telescope=telescope, debug=False, minmag=7, maxmag=17)
 
