@@ -70,6 +70,32 @@ def get_offset(ra1, dec1, ra2, dec2):
     dra, ddec = bright_star.spherical_offsets_to(target)
     
     return dra.to(u.arcsec).value, ddec.to(u.arcsec).value
+
+def query_sky_mapper_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
+    '''
+    Sends a VO query to the SkyMapper catalogue.
+    '''
+    
+    url = "http://skymapper.anu.edu.au/sm-cone/query?RA=%.6f&DEC=%.6f&SR=%.4f&RESPONSEFORMAT=CSV"%(ra, dec, radius_deg)
+
+    f = open("/tmp/skymapper_cat.csv", "wb")
+    page = urlopen(url)
+    content = page.read()
+    f.write(content)
+    f.close()
+    
+    # Read RA, Dec and magnitude from CSV 
+    catalog = Table.read("/tmp/skymapper_cat.csv", format="ascii.csv")
+
+    mask = (catalog["class_star"]>0.7) * (catalog["ngood"] >5)  * (catalog['r_psf']>minmag) * (catalog['r_psf']<maxmag)
+    catalog = catalog[mask]
+    
+    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
+    newcat["ra"] = catalog["raj2000"]
+    newcat["dec"] = catalog["dej2000"]
+    newcat["mag"] = catalog["r_psf"]
+    
+    return newcat
     
 def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     '''
@@ -110,6 +136,79 @@ def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     
     return newcat
 
+def get_fits_image(ra, dec, rad, debug=False):
+    '''
+    Connects to the PS1 or SkyMapper image service to retrieve the fits file to be used as a bse for the finder chart.
+    '''
+    #If dec> -30, we have Pan-STARRS
+    if dec > -30:
+        # Construct URL to download Pan-STARRS image cutout, and save to tmp.fits
+    
+        # First find the index of images and retrieve the file of the image that we want to use.
+        image_index_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=r'.format(ra, dec)
+        urlretrieve(image_index_url, '/tmp/ps1_image_index.txt')
+        ix = Table.read('/tmp/ps1_image_index.txt', format="ascii")
+        f = ix['filename'].data[0]
+        
+        image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red={0}&format=fits&size={1}&ra={2}&dec={3}".format(f, int(np.round(rad*3600*4, 0)), ra, dec)
+        if (debug):
+            print ("URL:", image_url)
+            print ("Downloading PS1 r-band image...")
+            
+        #Store the object to a fits file.
+        urlretrieve(image_url, '/tmp/tmp.fits')
+        
+            
+    #Otherwise, we have SkyMapper   
+    else:    
+        url="http://skymappersiap.asvo.nci.org.au/dr1_cutout/query?POS=%.6f,%.6f&SIZE=%.3f&FORMAT=image/fits&INTERSECT=center&RESPONSEFORMAT=CSV"%(ra, dec, rad)
+        page = urlopen(url)
+        content = page.read()
+        f = open("/tmp/skymapper_image_index.csv", "wb")
+        f.write(content)
+        f.close()
+        
+        ix = Table.read('/tmp/skymapper_image_index.csv', format="ascii.csv")
+
+        mask = ((ix['band']=='r')|(ix['band']=='g'))
+        
+        ix = ix[mask]
+        ix.sort(keys='exptime')
+    
+        image_url = ix['get_image'][-1]
+        urlretrieve(image_url, '/tmp/tmp.fits')
+
+
+
+    #Finally, once we have Pan-STARRS or SkyMapper images, we try to open them.
+    #If there has been any problem with that, we will just go to the DSS image service.
+    try:
+        image = fits.open("/tmp/tmp.fits")
+        #If everything went well, it shall be a fits image and opening it shall cause no issue.
+        return '/tmp/tmp.fits'
+
+        #If there was an error with the fits, we shall go for the DSS image
+    except IOError:
+        #One of the services may fail, so we need to account for that and provide a backup DSS image service.
+        try:
+            image_url = 'http://archive.eso.org/dss/dss/image?ra=%.5f&dec=%.5f&x=%.2f&y=%.2f&Sky-Survey=DSS1&mime-type=download-fits' % \
+                ((ra), (dec), (rad*60), (rad*60))
+            if debug: print ("Downloading DSS image...")
+            urlretrieve(image_url, '/tmp/tmp.fits')
+        except:
+            image_url = 'http://archive.stsci.edu/cgi-bin/dss_search?ra=%.6f&dec=%.6f&generation=DSS2r&equinox=J2000&height=%.4f&width=%.4f&format=FITS' % \
+                (ra, dec, rad*60, rad*60)
+            urlretrieve(image_url, '/tmp/tmp.fits')
+            
+        #We try one more time to open it. If not successful, we return None as the image filename.
+        try:
+            fits.open("/tmp/tmp.fits")
+        except IOError:
+            print ("Your fits image could not be retrieved.")
+            return None
+
+            
+        
 def get_cutout(ra, dec, name, rad, debug=True):
     '''
     Obtains the color composite cutout from the PS1 images.
@@ -159,6 +258,8 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         RA of our target in degrees.
     dec : float
         DEC of our target in degrees.
+    name : str
+        The name of your target
     rad : float
         Search radius for the finder in degrees.
     debug : bool (optional)
@@ -188,7 +289,10 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     except:
         ra, dec = hour2deg(ra, dec) 
 
-    catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
+    if dec < -30:
+        catalog = query_sky_mapper_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
+    else:
+        catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
     
     if (debug):
         print (catalog)
@@ -214,36 +318,16 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     
     if (debug): print (catalog)
     
-    # Construct URL to download DSS image cutout, and save to tmp.fits
-    image_index_url = 'http://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={0}&dec={1}&filters=r'.format(ra, dec)
-    urlretrieve(image_index_url, '/tmp/image_index.txt')
-    #ix = np.genfromtxt('/tmp/image_index.txt', names=True, dtype='str')
-    ix = Table.read('/tmp/image_index.txt', format="ascii")
-    f = ix['filename'].data[0]
-    
-    image_url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red={0}&format=fits&size={1}&ra={2}&dec={3}".format(f, int(np.round(rad*3600*4, 0)), ra, dec)
-    if (debug):
-        print ("URL:", image_url)
-        print ("Downloading PS1 r-band image...")
+    image_file = get_fits_image(ra, dec, rad, debug=debug)    
+
+    if image_file is None:
+        print ("FATAL ERROR! Your FITS image could not be retrieved.")
+        return
         
-    urlretrieve(image_url, '/tmp/tmp.fits')
-    
-    try:
-        ps1_image = fits.open("/tmp/tmp.fits")
-    #If there was an error with the fits, we shall go for the DSS image
-    except IOError:
-        try:
-            image_url = 'http://archive.eso.org/dss/dss/image?ra=%.5f&dec=%.5f&x=%.2f&y=%.2f&Sky-Survey=DSS1&mime-type=download-fits' % ((ra), (dec), (rad*60), (rad*60))
-            if debug: print ("Downloading DSS image...")
-            urlretrieve(image_url, '/tmp/tmp.fits')
-        except:
-            image_url = 'http://archive.stsci.edu/cgi-bin/dss_search?ra=%.6f&dec=%.6f&generation=DSS2r&equinox=J2000&height=%.4f&width=%.4f&format=FITS' % (ra, dec, rad*60, rad*60)
-            urlretrieve(image_url, '/tmp/tmp.fits')
-        
-        ps1_image = fits.open("/tmp/tmp.fits")
-    
+    image = fits.open(image_file)
+
     # Get pixel coordinates of SN, reference stars in DSS image
-    wcs = astropy.wcs.WCS(ps1_image[0].header)
+    wcs = astropy.wcs.WCS(image[0].header)
     
     if (len(catalog)>0):
         #w = astropy.wcs.find_all_wcs(ps1_image[0].header, relax=True, keysel=None)[0]
@@ -256,14 +340,15 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     
     # Plot finder chart
     
-    ps1_image[0].data[ps1_image[0].data>30000] = 30000
-    ps1_image[0].data[np.isnan(ps1_image[0].data)] = 0
+    #Adjust some of the counts to make easier the plotting.
+    image[0].data[image[0].data>30000] = 30000
+    image[0].data[np.isnan(image[0].data)] = 0
     
     plt.figure(figsize=(8,6))
     plt.set_cmap('gray_r')
-    smoothedimage = gaussian_filter(ps1_image[0].data, 1.5)
-    plt.imshow(smoothedimage,origin='lower',vmin=np.percentile(ps1_image[0].data.flatten(), 10), \
-    vmax=np.percentile(ps1_image[0].data.flatten(), 99.0))
+    smoothedimage = gaussian_filter(image[0].data, 1.3)
+    plt.imshow(smoothedimage, origin='lower',vmin=np.percentile(image[0].data.flatten(), 10), \
+    vmax=np.percentile(image[0].data.flatten(), 99.0))
     
     # Mark target
     plt.plot([target_pix[0,0]+15,(target_pix[0,0]+10)],[target_pix[0,1],(target_pix[0,1])], 'g-', lw=2)
@@ -282,14 +367,14 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
 
         
     # Set limits to size of DSS image
-    pylab.xlim([0,(ps1_image[0].data.shape[0])])
-    pylab.ylim([0,(ps1_image[0].data.shape[1])])
+    pylab.xlim([0,(image[0].data.shape[0])])
+    pylab.ylim([0,(image[0].data.shape[1])])
     
     # Plot compass
-    plt.plot([(ps1_image[0].data.shape[0])-10,(ps1_image[0].data.shape[0]-40)],[10,10], 'k-', lw=2)
-    plt.plot([(ps1_image[0].data.shape[0])-10,(ps1_image[0].data.shape[0])-10],[10,40], 'k-', lw=2)
-    plt.annotate("N", xy=((ps1_image[0].data.shape[0])-20, 40),  xycoords='data',xytext=(-4,5), textcoords='offset points')
-    plt.annotate("E", xy=((ps1_image[0].data.shape[0])-40, 20),  xycoords='data',xytext=(-12,-5), textcoords='offset points')
+    plt.plot([(image[0].data.shape[0])-10,(image[0].data.shape[0]-40)],[10,10], 'k-', lw=2)
+    plt.plot([(image[0].data.shape[0])-10,(image[0].data.shape[0])-10],[10,40], 'k-', lw=2)
+    plt.annotate("N", xy=((image[0].data.shape[0])-20, 40),  xycoords='data',xytext=(-4,5), textcoords='offset points')
+    plt.annotate("E", xy=((image[0].data.shape[0])-40, 20),  xycoords='data',xytext=(-12,-5), textcoords='offset points')
     
     # Set axis tics (not implemented correctly yet)
     plt.tick_params(labelbottom='off')
@@ -349,12 +434,13 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=" ")
         print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_S2").ljust(20), S2[0], S2[1], separator, ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
 
-
+    #If no magnitude was supplied, just do not put it on the chart.
     if not np.isnan(mag):
         rmag = "r=%.2f"%mag
     else:
         rmag = ""
-        
+     
+    #Write to the starlist if the name of the starlist was provided.
     if (not starlist is None) and (telescope =="Keck"):
         with open(starlist, "a") as f:
             f.write( "{0} {1} {2}  2000.0 #".format(name.ljust(17), *deg2hour(ra, dec, sep=" ")) + "%s \n"%rmag ) 

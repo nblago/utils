@@ -7,6 +7,7 @@ or a cone search radius around a given RA, DEC
 
 @author: nadiablago
 """
+from __future__ import print_function
 
 try:
     # For Python 3.0 and later
@@ -45,8 +46,6 @@ def get_tns_date2date(date1, date2):
     url = "https://wis-tns.weizmann.ac.il/search?&date_start%5Bdate%5D={0}&date_end%5Bdate%5D={1}&format=csv&num_page=1000".format(date1, date2)
     cont_url = urlopen(url)
     cont = cont_url.read() 
-
-    print cont
     
     t = Table.read(StringIO(cont), format='csv')
     coords = np.array([t["RA"], t["DEC"]]).T
