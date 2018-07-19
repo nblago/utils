@@ -387,9 +387,15 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     # Set size of window (leaving space to right for ref star coords)
     plt.subplots_adjust(right=0.65,left=0.05, top=0.99, bottom=0.05)
     
+    #If no magnitude was supplied, just do not put it on the chart.
+    if not np.isnan(mag):
+        target_mag = "mag=%.2f"%mag
+    else:
+        target_mag = ""
+        
     # List name, coords, mag of references etc
     plt.text(1.02, 0.85, name, transform=plt.axes().transAxes, fontweight='bold')
-    #plt.text(1.02, 0.80, "mag=%.1f"%mag, transform=plt.axes().transAxes, fontweight='bold')
+    plt.text(1.02, 0.80, "%s"%target_mag, transform=plt.axes().transAxes, fontweight='bold')
     plt.text(1.02, 0.75, "%.5f %.5f"%(ra, dec),transform=plt.axes().transAxes)
     rah, dech = deg2hour(ra, dec)
     plt.text(1.02, 0.7,rah+"  "+dech, transform=plt.axes().transAxes)
@@ -434,16 +440,13 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         S2 = deg2hour(catalog["ra"][1], catalog["dec"][1], sep=" ")
         print ( "{:s} {:s} {:s}  2000.0 {:s} raoffset={:.2f} decoffset={:.2f} r={:.1f} {:s} ".format( (name+"_S2").ljust(20), S2[0], S2[1], separator, ofR2[0], ofR2[1], catalog["mag"][1], commentchar))
 
-    #If no magnitude was supplied, just do not put it on the chart.
-    if not np.isnan(mag):
-        rmag = "r=%.2f"%mag
-    else:
-        rmag = ""
      
+    r, d = deg2hour(ra, dec, sep=" ")
+    
     #Write to the starlist if the name of the starlist was provided.
     if (not starlist is None) and (telescope =="Keck"):
         with open(starlist, "a") as f:
-            f.write( "{0} {1} {2}  2000.0 #".format(name.ljust(17), *deg2hour(ra, dec, sep=" ")) + "%s \n"%rmag ) 
+            f.write( "{0} {1} {2}  2000.0 # {3} \n".format(name.ljust(17), r, d, target_mag) ) 
             if (len(catalog)>0):
                 f.write ( "{:s} {:s} {:s}  2000.0 raoffset={:.2f} decoffset={:.2f} r={:.1f} # \n".format( (name+"_S1").ljust(17), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0]))
             if (len(catalog)>1):
@@ -452,7 +455,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
 
     if (not starlist is None) and (telescope =="P200"):
         with open(starlist, "a") as f:
-            f.write( "{0} {1} {2}  2000.0 ! \n".format(name.ljust(19), *deg2hour(ra, dec, sep=" ")) )
+            f.write( "{0} {1} {2}  2000.0 ! {3}\n".format(name.ljust(19), r, d, target_mag) )
             if (len(catalog)>0):
                 f.write ( "{:s} {:s} {:s}  2000.0 ! raoffset={:.2f} decoffset={:.2f} r={:.1f}  \n".format( (name+"_S1").ljust(19), S1[0], S1[1], ofR1[0], ofR1[1], catalog["mag"][0]))
             if (len(catalog)>1):
