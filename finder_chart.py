@@ -477,9 +477,11 @@ if __name__ == '__main__':
         ''', formatter_class=argparse.RawTextHelpFormatter)
         
         
+    print ("Usage: finder_chart.py <RA> <Dec> <Name>  <rad [deg]> <telescope [P200|Keck]>")
+    
     #Check if correct number of arguments are given
     if len(sys.argv) < 4:
-    	print ("Usage: finder.py <RA> <Dec> <Name>  <rad [deg]> <telescope [P200|Keck]>")
+    	print ("Not enough parameters given. Please, provide at least: finder_chart.py <RA> <Dec> <Name>")
     	sys.exit()
      
     ra=sys.argv[1]
@@ -487,8 +489,8 @@ if __name__ == '__main__':
     name=str(sys.argv[3])
     if (len(sys.argv)>=5):
         rad = float(sys.argv[4])
-        if (rad > 30./60):
-            print ('Search radius larger than 30 arcmin. Not sure why you need such a large finder chart... reducing to 10 armin for smoother operations...')
+        if (rad > 15./60):
+            print ('Requested search radius of %.2f arcmin is larger than 15 arcmin. Not sure why you need such a large finder chart... reducing to 10 armin for smoother operations...'%(rad * 60))
             rad = 10./60
     else:
         rad = 2./60
