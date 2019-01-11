@@ -247,7 +247,7 @@ def get_cutout(ra, dec, name, rad, debug=True):
     urlretrieve(image_url, '/tmp/tmp_%s.jpg'%name)
     
     
-def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=True, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan):
+def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=True, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan, image_file=None):
     '''
     Creates a PDF with the finder chart for the object with the specified name and coordinates.
     It queries the PS1 catalogue to obtain nearby offset stars and get an R-band image as background.
@@ -318,13 +318,18 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     
     if (debug): print (catalog)
     
-    image_file = get_fits_image(ra, dec, rad, debug=debug)    
-
     if image_file is None:
+        image_file = get_fits_image(ra, dec, rad, debug=debug)    
+        image = fits.open(image_file)
+    else:
+        image = fits.open(image_file)
+        image = np.rot90(np.rot90(image))
+
+
+    if image_file is None or image is None:
         print ("FATAL ERROR! Your FITS image could not be retrieved.")
         return
         
-    image = fits.open(image_file)
 
     # Get pixel coordinates of SN, reference stars in DSS image
     wcs = astropy.wcs.WCS(image[0].header)
