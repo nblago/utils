@@ -9,7 +9,7 @@ Class that enables to fit a black body function to a set of magntidues.
 
 from __future__ import print_function
 
-
+import matplotlib
 from matplotlib import pylab as plt
 import corner
 from astropy import units as u
@@ -22,10 +22,10 @@ import scipy
 from scipy import stats
 import extinction
 from astropy.cosmology import FlatLambdaCDM
+from scipy.optimize import curve_fit
 
 
-class BBFit:    
-
+class BBFit:            
     
     def __init__(self):
         '''
@@ -37,11 +37,20 @@ class BBFit:
         self.av_mw = 0
         self.law = "Fitzpatrick"
         self.law_mw = "Fitzpatrick"
+        
+        #Black body models
         self.initT1 = 10000 #K
         self.initA1 = 30 # log10(cm2)
+        self.initT2 = 3000 #K
+        self.initA2 = 30 # log10(cm2)
         self.z = None
         self.distMpc = None #in Mpc
         self.mjd = 0 
+        
+        #Power law models
+        self.alpha = 0.75
+        self.alphaerr1 = 0
+        self.alphaerr2 = 0
 
         #Location for plots
         self.plotdir = "."
@@ -52,8 +61,9 @@ class BBFit:
         self.niterations = 10000
         self.burnin = 5000
         self.threads = 10
-        self.nwalkers = 8
+        self.nwalkers = 20
         self.sampler = None
+        self.model = "BlackBody" #others are "BlackBody_Av" or "BlackBody2_Av"
 
         #Input data parameters.
         #The fitter will run either with magnitudes or with fluxes
@@ -84,15 +94,30 @@ class BBFit:
         self.Lerr1 = None
         self.Lerr2 = None
 
+        #Output for the secondary star
+        self.Asec = None
+        self.Asecerr1 = None
+        self.Asecerr2 = None
+        
+        self.Rsec = None
+        self.Rsecerr1 = None
+        self.Rsecerr2 = None
+        
+        self.Lsec = None
+        self.Lsecerr1 = None
+        self.Lsecerr2 = None
         self.cosmo = FlatLambdaCDM(H0=70, Om0=0.3, Tcmb0=2.725)
-
+        
+        #Set the plotting characteristics
+        self._matplotlib_init()
         
         #Add the environment variable which points to the filter response files for the bands we are interested in.
         if not 'PYSYN_CDBS' in os.environ.keys():
             print ("Adding the Pysynphot environment:")
-            os.environ['PYSYN_CDBS'] == "/Users/nadiablago/Documents/Software/pysynphot_files"
+            os.environ['PYSYN_CDBS'] = "/Users/nadiablago/Documents/Software/pysynphot_files"
+        print (os.environ['PYSYN_CDBS'])
     
-        self.banddic = {"Y": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/ctio_y_003.dat"),
+        self.banddic = {"Y": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/ctio_y_andicam.dat"),
                     "J": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_j_004_syn.fits"),
                    "H": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_h_004_syn.fits"),
                    "K": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_k_004_syn.fits"),
@@ -105,10 +130,37 @@ class BBFit:
                    "swift,uvw1": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/swift_uvw1_uvot.dat"),
                    "swift,u": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/swift_u_uvot.dat"),
                    "swift,b": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/swift_b_uvot.dat"),
-                   "swift,v": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/swift_v_uvot.dat")
+                   "swift,v": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/swift_v_uvot.dat"),
+                   "paranal,Y":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_VISTA.Y.dat"),
+                   "paranal,Z":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_VISTA.Z.dat"),
+                   "paranal,J":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_VISTA.J.dat"),
+                   "paranal,H":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_VISTA.H.dat"),
+                   "paranal,Ks":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_VISTA.Ks.dat"),
+                   "omegacam,u":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_OmegaCAM.u_SDSS.dat"),
+                   "omegacam,g":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_OmegaCAM.g_SDSS.dat"),
+                   "omegacam,r":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_OmegaCAM.r_SDSS.dat"),
+                   "omegacam,i":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_OmegaCAM.i_SDSS.dat"),
+                   "omegacam,z":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_OmegaCAM.z_SDSS.dat"),                    
+                   "omegacam,Halpha":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Paranal_OmegaCAM.Halpha.dat")
            }
-               
-       
+
+
+    def _matplotlib_init(self):
+
+        matplotlib.rcParams['xtick.minor.size'] = 6
+        matplotlib.rcParams['xtick.major.size'] = 6
+        matplotlib.rcParams['ytick.major.size'] = 6
+        matplotlib.rcParams['xtick.minor.size'] = 4
+        matplotlib.rcParams['ytick.minor.size'] = 4
+        matplotlib.rcParams['lines.linewidth'] = 0.5
+        matplotlib.rcParams['axes.linewidth'] = 1.5
+        matplotlib.rcParams['font.size']= 14.0
+        matplotlib.rcParams['font.family']= 'sans-serif'
+        matplotlib.rcParams['xtick.major.width']= 2.
+        matplotlib.rcParams['ytick.major.width']= 2.
+        matplotlib.rcParams['ytick.direction']='in'
+        matplotlib.rcParams['xtick.direction']='in'
+        
     def _band2flux(self):
         '''
         Will transform the magnitude measurement into a flux measurement. 
@@ -141,7 +193,7 @@ class BBFit:
             #Correct for Milky Way extinction
             m = m - extinction.fitzpatrick99(np.array([effwave]), a_v=self.av_mw, r_v=3.1, unit='aa')[0]
             
-            #Normalize the spectrum to the AB mangitude of the observation
+            #Normalize the spectrum to the magnitude of the observation
             sp_norm = sp.renorm(m, psys, band)
             #Observe with the band
             obs = ps.Observation(sp_norm, band)
@@ -170,12 +222,12 @@ class BBFit:
         logA = p[1] 
 
         Area = 10**logA * u.cm**2
-        Blam =  Area * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+        flam =  Area * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
             (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T))-1)
         
-        return Blam.to(u.erg/u.s/u.Angstrom).value
+        return flam.to(u.erg/u.s/u.Angstrom).value
 
-    def _model_av(self, lam, p):
+    def _model_simple(self, lam, T, logA):
         '''
         Return units: erg s-1 A-1
         As we multiply by the area of the emitting source (in cm**2)
@@ -183,19 +235,108 @@ class BBFit:
         
         lam = lam * u.Angstrom
         
+        T = T * u.K
+
+        Area = 10**logA * u.cm**2
+        flam =  Area * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+            (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T))-1)
+        
+        return flam.to(u.erg/u.s/u.Angstrom).value
+        
+    def _model_av(self, lam, p):
+        '''
+        Return units: erg s-1 A-1
+        As we multiply by the area of the emitting source (in cm**2)
+        '''
+        
         T = p[0] * u.K
         logA = p[1] 
-        av = p[2]
+        a_v = p[2]
+
+        #Compute the effect of reddening as a flux factor
+        flux_red =  10**(-0.4 * extinction.fitzpatrick99(lam, a_v, unit='aa'))
+        lam = lam * u.Angstrom
+        
 
         area = 10**logA * u.cm**2
         flam =  area * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
             (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T))-1)
         
-        flam = flam.to(u.erg/u.s/u.Angstrom).value
+        #Apply the reddening
+        flam = flam.to(u.erg/u.s/u.Angstrom).value * flux_red
         
-        ext = extinction.fitzpatrick99(lam, av, unit='aa')
+                
+        return flam
         
-        return 
+    def _model2_av(self, lam, p):
+        '''
+        Return units: erg s-1 A-1
+        As we multiply by the area of the emitting source (in cm**2)
+        '''
+        
+        T1 = p[0] * u.K
+        logA1 = p[1] 
+        a_v = p[2]
+        T2 = p[3] * u.K
+        logA2 = p[4]
+
+        #Compute the effect of reddening as a flux factor
+        flux_red =  10**(-0.4 * extinction.fitzpatrick99(lam, a_v, unit='aa'))
+        lam = lam * u.Angstrom
+        
+
+        area1 = 10**logA1 * u.cm**2
+        area2 = 10**logA2 * u.cm**2
+        flam1 =  area1 * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+            (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T1))-1)
+        flam2 =  area2 * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+            (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T2))-1)
+            
+        flam = flam1 + flam2
+        #Apply the reddening
+        flam = flam.to(u.erg/u.s/u.Angstrom).value * flux_red
+        
+                
+        return flam
+
+    def _model2_av_2(self, lam, T1, logA1, a_v, T2, logA2):
+        '''
+        Return units: erg s-1 A-1
+        As we multiply by the area of the emitting source (in cm**2)
+        '''
+
+        return self._model2_av(lam, (T1, logA1, a_v, T2, logA2))
+        
+    def _model_powerlaw(self, lam, p):
+        '''
+        Return units: erg s-1 A-1
+        As we multiply by the area of the emitting source (in cm**2)
+        '''
+        
+        lam = lam * u.Angstrom
+        
+        w0 = 4000 #p[0] #Refernce wavelength
+        alpha = p[0]
+        logA1 = p[1]
+        a_v = p[2]
+        
+        f = ps.PowerLaw(w0, alpha)
+        f.convert('flam')
+        
+        flam = np.interp(lam, f.wave, f.flux)
+        
+        flux_red =  10**(-0.4 * extinction.fitzpatrick99(lam, a_v, unit='aa'))
+
+
+        return 10**logA1 * flam * flux_red #.to(u.erg/u.s/u.Angstrom).value
+
+    def _model_powerlaw_2(self, lam, alpha, logA1, a_v):
+        '''
+        Return units: erg s-1 A-1
+        As we multiply by the area of the emitting source (in cm**2)
+        '''
+
+        return self._model_powerlaw(lam, (alpha, logA1, a_v))
         
     #likelihood function
     def _like(self, p, xdat, ydat, errdat, debug=False):
@@ -204,24 +345,25 @@ class BBFit:
         args: carry anything we want to pass to our function (e.g. the data) 
         '''   
         
-        ymod = self._model(xdat, p)
-        
-         
-        #In case we want to cosider some outlier fraction as a parameter of the MCMC
-        #outlierfrac = p[-1] # fraction of dataset in outliers
-        #if outlierfrac < 0:
-        #    return np.log(1e-320)
-        #if outlierfrac >= 1:
-        #    return np.log(1e-320)
-        #prob = ( (1 - outlierfrac) * stats.norm.pdf(ydat, ymod, errdat) + outlierfrac * stats.norm.pdf(ydat, ymod, errdat*100) )	
-        
+        if self.model == "BlackBody":
+            ymod = self._model(xdat, p)
+        elif self.model == "BlackBody_Av":
+            ymod = self._model_av(xdat, p)
+        elif self.model == "BlackBody2_Av":
+            ymod = self._model2_av(xdat, p)
+        elif self.model == "PowerLaw":
+            ymod = self._model_powerlaw(xdat, p)
+        else:
+            print ("Unknown model", self.model)
+            return np.nan
+
         #Discard models which exceed the upper limits
         if (np.any(ymod[errdat<0] > ydat[errdat<0])):
             prob = 1e-320
         else:
             prob = stats.norm.pdf(ydat, ymod, errdat) 
     
-        # log probabilities
+        # log probcilities
         # we add tiny number to avoid NaNs
         mylike = np.log(prob + 1e-320).sum() 
     
@@ -248,24 +390,55 @@ class BBFit:
         fraction: fraction of outliers in our datapoints.
         '''
         
-        T = p[0] 
-        A = p[1] 
-
-        #if T<0:
-        #    return np.log(1e-323)
-
-        # normal mean= 0 , sig = 2
-        logp = stats.norm.logpdf(T, loc=self.initT1, scale=10000)
-        #logp = stats.uniform.logpdf(T, 500, 150000)
-
-        #uniform from the initial value until 3 orders of mangitude up and down
-        logp = logp + stats.uniform.logpdf(A, 20, 40)
-        #logp = logp + stats.norm.logpdf(A, self.initA1, 10)
-        
-        #fraction = p[2] #uniform from 0 to 0.05
-        #logp = logp + stats.uniform.logpdf(fraction,0,.05)
-
+        if self.model == "BlackBody" or self.model =="BlackBody_Av" or self.model == "BlackBody2_Av":
+            
+            T1 = p[0] 
+            logA1 = p[1] 
     
+            if T1 < 0:
+                return -np.inf
+    
+            # normal mean= 0 , sig = 2
+            logp = stats.uniform.logpdf(T1, 1000, 50000)
+            #logp = stats.uniform.logpdf(T1, 500, 70000)
+    
+            #uniform from the initial value until 3 orders of mangitude up and down
+            #logp = logp + stats.uniform.logpdf(logA1, 18, 16)
+            logp = logp + stats.uniform.logpdf(logA1, 20,  35)
+        
+        if self.model =="BlackBody_Av":
+            av = p[2]
+            if av < 0 or av > 8:
+                logp = -np.inf
+            else:
+                logp = logp + stats.norm.logpdf(av, self.av_host, self.av_host)
+        elif self.model == "BlackBody2_Av":
+            av = p[2]
+            T2 = p[3]
+            logA2 = p[4]
+
+            if T1 < 0 or T2 > T1 or T2 < 0 or av < 0 or av > 10:
+                return - np.inf
+
+            else:
+                logp = logp + stats.uniform.logpdf(av, 0, 3.6)
+
+                logp = logp + stats.uniform.logpdf(T2, 1000, 50000)
+
+                #logp = logp + stats.uniform.logpdf(T2, 500, 70000)
+                logp = logp + stats.uniform.logpdf(logA2, 20,  35)
+
+        elif self.model == "PowerLaw":
+            alpha = p[0]
+            logA1 = p[1] 
+            av = p[2]
+            
+            logp = stats.norm.logpdf(alpha, -2./3, 2)
+            logp = logp + stats.uniform.logpdf(logA1, 15, 30)
+            if av < 0 or av > 10:
+                logp = -np.inf
+            else:
+                logp = logp + stats.norm.logpdf(av, self.av_host, self.av_host/2.)            
         return logp	
 
     def _get_max_and_intervals(self, x):
@@ -310,30 +483,84 @@ class BBFit:
         Transforms the log area into a radius.
         Transforms the temperature ad radius into a black body luminosity.
         '''
-        T1, T, T2 =  self._get_max_and_intervals(self.sampler.flatchain[:,0])
-        A1, A, A2 =  self._get_max_and_intervals(self.sampler.flatchain[:,1])
         
-        R = self._area2rsun(10**A) #Rsun
-        R1 = self._area2rsun(10**A1)
-        R2 = self._area2rsun(10**A2)
-        
-        self.T = T
-        self.Terr1 = T - T1
-        self.Terr2 = T2 - T
-        
-        self.A = A
-        self.Aerr1 = A - A1
-        self.Aerr2 = A2 - A
-             
-        self.R = R
-        self.Rerr1 = R - R1
-        self.Rerr2 = R2 - R
-        
-        self.L = self._get_bol_lum(T, R)
-        self.Lerr1 = self.L - self._get_bol_lum(T1, R1)
-        self.Lerr2 = self._get_bol_lum(T2, R2) - self.L
-        
+        if self.model.startswith("BlackBody"):
+            T1, T, T2 =  self._get_max_and_intervals(self.sampler.flatchain[:,0])
+            A1, A, A2 =  self._get_max_and_intervals(self.sampler.flatchain[:,1])
+            
+            R = self._area2rsun(10**A) #Rsun
+            R1 = self._area2rsun(10**A1)
+            R2 = self._area2rsun(10**A2)
+            
+            self.T = T
+            self.Terr1 = T - T1
+            self.Terr2 = T2 - T
+            
+            self.A = A
+            self.Aerr1 = A - A1
+            self.Aerr2 = A2 - A
+                 
+            self.R = R
+            self.Rerr1 = R - R1
+            self.Rerr2 = R2 - R
+            
+            self.L = self._get_bol_lum(T, R)
+            self.Lerr1 = self.L - self._get_bol_lum(T1, R1)
+            self.Lerr2 = self._get_bol_lum(T2, R2) - self.L
+            
+            if self.model == "BlackBody_Av":
+                Av1, Av, Av2 = self._get_max_and_intervals(self.sampler.flatchain[:,2])
+                self.Av = Av
+                self.Averr1 = Av - Av1
+                self.Averr2 = Av2 - Av
 
+            elif self.model == "BlackBody2_Av":
+                
+                Av1, Av, Av2 = self._get_max_and_intervals(self.sampler.flatchain[:,2])
+                Tsec1, Tsec, Tsec2 =  self._get_max_and_intervals(self.sampler.flatchain[:,3])
+                Asec1, Asec, Asec2 =  self._get_max_and_intervals(self.sampler.flatchain[:,4])
+                
+                self.Av = Av
+                self.Averr1 = Av - Av1
+                self.Averr2 = Av2 - Av
+                
+                Rsec = self._area2rsun(10**Asec) #Rsun
+                Rsec1 = self._area2rsun(10**Asec1)
+                Rsec2 = self._area2rsun(10**Asec2)
+                
+                self.Tsec = Tsec
+                self.Tsecerr1 = Tsec - Tsec1
+                self.Tsecerr2 = Tsec2 - Tsec
+                
+                self.Asec = Asec
+                self.Asecerr1 = Asec - Asec1
+                self.Asecerr2 = Asec2 - Asec
+                     
+                self.Rsec = Rsec
+                self.Rsecerr1 = Rsec - Rsec1
+                self.Rsecerr2 = Rsec2 - Rsec
+        else:
+            alpha1, alpha, alpha2 =  self._get_max_and_intervals(self.sampler.flatchain[:,0])
+            A1, A, A2 =  self._get_max_and_intervals(self.sampler.flatchain[:,1])
+            Av1, Av, Av2 = self._get_max_and_intervals(self.sampler.flatchain[:,2])
+        
+            self.alpha = alpha
+            self.alphaerr1 = alpha - alpha1
+            self.alphaerr2 = alpha2 - alpha
+            
+            self.A = A
+            self.Aerr1 = A - A1
+            self.Aerr2 = A2 - A
+            
+            self.Av = Av
+            self.Averr1 = Av - Av1
+            self.Averr2 = Av2 - Av
+
+            R = self._area2rsun(10**A) #Rsun
+            R1 = self._area2rsun(10**A1)
+            R2 = self._area2rsun(10**A2)
+            
+            
     def _get_bol_lum(self, T, R):
         '''
         T is in K
@@ -363,11 +590,11 @@ class BBFit:
         # This name will increase a count if the name exists already.
         else:            
             i = 0
-            name = os.path.join(self.plotdir, "%s_%.1f_%d.png"%(plot_name, self.mjd, i))
+            name = os.path.join(self.plotdir, "%s_%.1f_%d.pdf"%(plot_name, self.mjd, i))
 
             while (os.path.isfile(name)):
                 i = i+1
-                name = os.path.join(self.plotdir, "%s_%.1f_%d.png"%(plot_name, self.mjd, i))
+                name = os.path.join(self.plotdir, "%s_%.1f_%d.pdf"%(plot_name, self.mjd, i))
                 
         return name
                 
@@ -376,15 +603,29 @@ class BBFit:
         Will transform the magnitudes to fluxes and use the distance to the object to
         calculate the luminosity at each wavelength.
         '''
+
+
         # generate the data     
         self.wls, self.fluxes, self.fluxerrs = self._band2flux()
 
-
-        if not self.distMpc is None:
+        #Plot the raw fluxes before correcting them.
+        '''if (plot):
+            plt.figure(figsize=(8,6))
+            plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0)
+            for i in range(len(self.wls)):
+                plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i].split(",")[-1], alpha=.4)
+            name = self._get_save_path(None, "fluxes_obs")
+            plt.yscale("log")
+            plt.xlabel("Wavelength [A]")
+            plt.ylabel("log (Flux/[erg/cm2/s])")
+            plt.tight_layout()
+            plt.savefig(name, dpi=200)'''
+            
+        if not self.distMpc is None and self.distMpc !=0:
             print ("Using distance to the source of %.1e Mpc"%self.distMpc)
             fluxFactor = (4*np.pi*((self.distMpc*u.Mpc).to(u.cm) )**2).value
 
-        elif self.distMpc is None and not self.z is None:
+        elif (self.distMpc is None or self.distMpc==0 )and (not self.z is None and self.z != 0):
             self.distMpc = self.cosmo.luminosity_distance(self.z)
                 
             #Compute the flux multiplication factor for the object if it is at distance distMpc
@@ -399,10 +640,77 @@ class BBFit:
         self.fluxes = self.fluxes * fluxFactor
         self.fluxerrs = self.fluxerrs * fluxFactor
 
-        if (plot):
-            plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o")
-            name = self._get_save_path(None, "fluxes_obs")
+        self._initialize_parameters(plot)
+
+
+    def _initialize_parameters(self, plot=False):
+        '''
+        Runs the least squares optimiztion routine to find the best initial parameters 
+        to start the MCMC with.
+        '''
+
+        lam = np.linspace(3000, 25000, 2000)
         
+        if self.model == "BlackBody2_Av":
+            flux_ini = self._model2_av_2(lam, self.initT1, self.initA1, self.av_host, self.initT2, self.initA2)
+
+            p0 = (self.initT1, self.initA1, self.av_host, self.initT2, self.initA2)
+            
+            print ("Initial ", p0)
+            
+            params, covar = curve_fit(self._model2_av_2, self.wls , self.fluxes, \
+            p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 10000)
+            
+            '''self.initT1 = params[0]
+            self.initA1 = params[1]
+            self.av_host = params[2]
+            self.initT2 = params[3]
+            self.initA2 = params[4]'''
+
+            #print ("Final ", self.initT1, self.initA1, self.av_host, self.initT2, self.initA2)
+            
+            if plot:
+                flux_end = self._model2_av_2(lam, *params)
+                
+                plt.clf()
+                #plt.plot(lam, flux_ini, label="initial flux %s"%self.model)
+                #plt.plot(lam, flux_end, label="Best fit %s"%self.model)
+                plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
+                plt.xlabel("Wavelength [A]")
+                plt.ylabel("$L_{\\lambda}$ [erg/s/A]")
+                plt.legend()
+                name = self._get_save_path(None, "fluxes_obs")
+                plt.savefig(name, dpi=200)
+                
+        if self.model == "PowerLaw":
+
+            params, covar = curve_fit(self._model_powerlaw_2, self.wls , self.fluxes, \
+            p0=(self.alpha, self.initA1, self.av_host), sigma=self.fluxerrs, absolute_sigma=True, maxfev = 10000)
+            
+            alpha = params[0]
+            logA = params[1]
+            av = params[2]
+            
+            self.alpha = alpha
+            self.logA1 = logA
+            self.av_host = av
+            
+            print (alpha, logA, av)
+            
+            if plot:
+                lam = np.linspace(3000, 25000, 2000)
+                fluxpw = self._model_powerlaw_2(lam, alpha, logA, av)
+                
+                plt.clf()
+                plt.plot(lam, fluxpw, label="Best fit %s"%self.model)
+                plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
+                plt.xlabel("Wavelength [A]")
+                plt.ylabel("$L_{\\lambda}$ [erg/s/A]")
+                plt.legend()
+                name = self._get_save_path(None, "fluxes_obs_LSQ_fit")
+                plt.savefig(name, dpi=200)
+    
+    
     def run(self):
         '''
         Runs the main MCMC process. 
@@ -413,9 +721,29 @@ class BBFit:
         ys = self.fluxes
         errs = self.fluxerrs
         
-        p0 = np.array([ self.initT1, self.initA1])
-        sigs = np.array([self.initT1*0.2, 0.2])
-    	
+        if self.model == "BlackBody":
+            p0 = np.array([ self.initT1, self.initA1])
+            sigs = np.array([2000, 10])
+            
+            #Initially fit with least squares
+            #BBparams, covar = curve_fit(self._model_simple, self.wls, self.fluxes, \
+            #    p0=(self.initT1, self.initA1), sigma=self.fluxerrs, absolute_sigma=True, maxfev = 5000)
+            #T_ini = BBparams[0] #K    
+            #Area_ini = BBparams[1]  #cm2 
+            
+            #Re-assign the initial parameters
+            #p0 = np.array([T_ini, Area_ini])
+
+        elif self.model == "BlackBody_Av":
+            p0 = np.array([ self.initT1, self.initA1, self.av_host])
+            sigs = np.array([2000, 10, 2])            
+        elif self.model == "BlackBody2_Av":
+            p0 = np.array([ self.initT1, self.initA1, self.av_host, self.initT2, self.initA2])
+            sigs = np.array([self.initT1/2, 10, 0.5,  self.initT2/2, 10])   
+        elif self.model == "PowerLaw":
+            p0 = np.array([ self.alpha, self.initA1, self.av_host])
+            sigs = np.array([2, 10, 2])
+            
         ndim = len(p0)
         
         # emsemble MCMC
@@ -432,11 +760,12 @@ class BBFit:
     
         self.sampler = sampler
 
+        print ("MCMC main phase finished")
         self._fill_output()
 
 
         
-    def plot_corner_posteriors(self, savefile=None, labels=["T", "log(Area)"]):
+    def plot_corner_posteriors(self, savefile=None, labels=["T", "log(Area)", "Av", "Tsec", "log(Area_sec)"]):
         '''
         Plots the corner plot of the MCMC results.
         '''
@@ -444,31 +773,25 @@ class BBFit:
         chain = self.sampler
         samples = chain.flatchain
         
-        samples = samples[:,0:2]    
-        fig = corner.corner(samples, labels=labels[0:2])
+        samples = samples[:,0:ndim]  
+        plt.figure(figsize=(8,8))
+        fig = corner.corner(samples, labels=labels[0:ndim])
         plt.title("MJD: %.2f"%self.mjd)
         name = self._get_save_path(savefile, "mcmc_posteriors")
         plt.savefig(name)
         plt.close("all")
         
-        #self.sampler.chain.shape = (nwalkers, niterations, ndim)
-        chain0 = self.sampler.chain[:,:,0]
-        chain1 = self.sampler.chain[:,:,1]
 
-        nwalk, nit = chain0.shape
-        
-        plt.subplot(2,1,1)
-        for i in np.arange(nwalk):
-            plt.plot(chain0[i], 'r-', lw=0.1)
-            plt.ylabel(labels[0])
-            plt.xlabel("Iteration")
+        plt.figure(figsize=(8,ndim*3))
+        for n in range(ndim):
+            plt.subplot(ndim,1,n+1)
+            chain = self.sampler.chain[:,:,n]
+            nwalk, nit = chain.shape
             
-        plt.subplot(2,1,2)
-        for i in np.arange(nwalk):
-            plt.plot(chain1[i], 'b-', lw=0.1)
-            plt.ylabel(labels[1])
-            plt.xlabel("Iteration")
-            
+            for i in np.arange(nwalk):
+                plt.plot(chain[i], lw=0.1)
+                plt.ylabel(labels[n])
+                plt.xlabel("Iteration")
         name_walkers = self._get_save_path(savefile, "mcmc_walkers")
         plt.tight_layout()
         plt.savefig(name_walkers)
@@ -481,16 +804,47 @@ class BBFit:
         Plots the best fit model to the data.
         '''
         
-        lam = np.linspace( np.min(self.wls) -500 , np.max(self.wls) + 500, 100)
+        lam = np.linspace( np.min(self.wls) -1000 , np.max(self.wls) + 500, 1000)
         
         plt.clf()
         plt.figure(figsize=(8,6))
         plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, fmt="o")
-        fluxbb = self._model(lam, (self.T, self.A))
-        plt.plot(lam, fluxbb, "k-", label="BB fit")
-        plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$"%(self.T, self.R, self.L))    
+        for i in range(len(self.wls)):
+                plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i].split(",")[-1], alpha=.4)
+        
+        if self.model == "BlackBody":
+            fluxbb = self._model(lam, (self.T, self.A))
+            plt.plot(lam, fluxbb, "k-", label="BB fit")
+            plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$"%(self.T, self.R, self.L))    
+
+        elif self.model == "BlackBody_Av":
+            fluxbb = self._model(lam, (self.T, self.A))
+            fluxbb_red = self._model_av(lam, (self.T, self.A, self.Av))
+            plt.plot(lam, fluxbb, "k-", label="BB fit")
+            plt.plot(lam, fluxbb_red, "red", label="BB fit + reddening")
+            plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$ Av: %.2f"%(self.T, self.R, self.L, self.Av))    
+
+        elif self.model == "BlackBody2_Av":
+            fluxbb_red = self._model_av(lam, (self.T, self.A, self.Av))
+            fluxbb_secondary_red = self._model_av(lam, (self.Tsec, self.Asec, self.Av))
+            fluxbb_with_seconday = self._model2_av(lam, (self.T, self.A, self.Av, self.Tsec, self.Asec))
+
+            plt.plot(lam, fluxbb_red, "k-", label="BB1 fit + reddening")
+            plt.plot(lam, fluxbb_secondary_red, "k--", label="BB2 fit + reddening")
+            plt.plot(lam, fluxbb_with_seconday, "green", label="BB1 + BB2")
+            
+            plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$ Av: %.2f\n T2: %.1f R2: %.1f"%(self.T, \
+                      self.R, self.L, self.Av, self.Tsec, self.Rsec)) 
+                      
+        elif self.model == "PowerLaw":
+            flux = self._model_powerlaw(lam, (self.alpha, self.A, self.Av))
+            plt.plot(lam, flux, "k-", label="PowerLaw + reddening")
+            plt.title("$\\alpha$: %.1f Av: %.2f"%(self.alpha, self.Av))    
+
+         
         plt.xlabel("Wavelength [$\\AA$]")
         plt.ylabel("log Flux")
+        plt.ylim(ymin=np.min(self.fluxes) * 0.9)
         plt.yscale("log")
         plt.legend()
         name = self._get_save_path(None, "mcmc_best_fit_model")
