@@ -1,3 +1,9 @@
+"""
+Created on Thu Dec 13 12:09:28 2018
+
+@author: nadiablago
+"""
+
 import numpy as np
 
 def getDegRaString(ra):

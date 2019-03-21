@@ -9,6 +9,9 @@ Coefficients used from Jordi et. al. 2010.
 This transformations are created for different values of extinction for stars of different spectral types.
 
 '''
+from __future__ import print_function
+
+
 import numpy as np
 import os
 
@@ -143,7 +146,7 @@ def getColorPos(gr, gi, gz, ri, pos):
 	elif ncols == 2:
 		return give_coefs_2_color(vec, pos)
 	else:
-		print "Provide 1 or 2 colors please"
+		print ("Provide 1 or 2 colors please")
 		return None
 
 def give_coefs_1_color(vec, pos):
@@ -155,7 +158,7 @@ def give_coefs_1_color(vec, pos):
 	try:
 		dat = np.loadtxt("data/sdss_{:}.dat".format(col_name), usecols=(0, 1, 2, 3))
 	except:
-		print "File not found: data/sdss_{:}.dat".format(col_name)
+		print ("File not found: data/sdss_{:}.dat".format(col_name))
 		return None
 	coefs = np.array(dat[pos])
 	
@@ -172,7 +175,7 @@ def give_coefs_2_color(vec, pos):
 		path = os.getcwd()
 		dat = np.loadtxt("{:}/data/sdss_{:}_{:}.dat".format(path,col_names[1], col_names[0]), usecols=range(0, 8))
 	except:
-		print "File not found: {:}/data/sdss_{:}_{:}.dat".format(path, col_names[1], col_names[0])
+		print ("File not found: {:}/data/sdss_{:}_{:}.dat".format(path, col_names[1], col_names[0]))
 		return None
 	coefs = np.array(dat[pos])
 

@@ -23,6 +23,7 @@ from scipy import stats
 import extinction
 from astropy.cosmology import FlatLambdaCDM
 from scipy.optimize import curve_fit
+import warnings
 
 
 class BBFit:            
@@ -116,7 +117,7 @@ class BBFit:
         if not 'PYSYN_CDBS' in os.environ.keys():
             print ("Adding the Pysynphot environment:")
             os.environ['PYSYN_CDBS'] = "/Users/nadiablago/Documents/Software/pysynphot_files"
-        print (os.environ['PYSYN_CDBS'])
+        print ('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
     
         self.banddic = {"Y": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/ctio_y_andicam.dat"),
                     "J": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_j_004_syn.fits"),
@@ -222,9 +223,11 @@ class BBFit:
         T = p[0] * u.K
         R = (p[1] * u.Rsun).to(u.cm)
 
-        Area = np.pi * (4 * np.pi * R**2)
-        flam =  Area * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
-            (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T))-1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            Area = np.pi * (4 * np.pi * R**2)
+            flam =  Area * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+                (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T))-1)
         
         return flam.to(u.erg/u.s/u.Angstrom).value
 
@@ -289,9 +292,11 @@ class BBFit:
 
         area1 = np.pi * (4 * np.pi * R1**2)
         area2 = np.pi * (4 * np.pi * R2**2)
-        flam1 =  area1 * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            flam1 =  area1 * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
             (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T1))-1)
-        flam2 =  area2 * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
+            flam2 =  area2 * (2*cnt.h*((cnt.c).to(u.cm/u.s))**2/( (lam.to(u.cm))**5))/ \
             (np.exp((cnt.h*cnt.c)/(lam.to(u.m)*cnt.k_B*T2))-1)
             
         flam = flam1 + flam2
@@ -329,8 +334,10 @@ class BBFit:
         #We need an extra pi as it is integrated across all steradians
         #The second factor is the surface of the black body
         #The third ones is the Plank law
-        flam1 =  np.pi * (4 * np.pi * R1**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T1))-1)
-        flam2 =  np.pi * (4 * np.pi * R2**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T2))-1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            flam1 =  np.pi * (4 * np.pi * R1**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T1))-1)
+            flam2 =  np.pi * (4 * np.pi * R2**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T2))-1)
     
         #Compute the effect of reddening as a flux factor
         flux_red =  10**(-0.4 * extinction.fitzpatrick99(lam*1e8, a_v, unit='aa'))
@@ -364,8 +371,10 @@ class BBFit:
         #We need an extra pi as it is integrated across all steradians
         #The second factor is the surface of the black body
         #The third ones is the Plank law
-        flam1 =  np.pi * (4 * np.pi * R1**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T1))-1)
-        flam2 =  np.pi * (4 * np.pi * R2**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T2))-1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            flam1 =  np.pi * (4 * np.pi * R1**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T1))-1)
+            flam2 =  np.pi * (4 * np.pi * R2**2) * ( (2*self.h*self.c**2)/( lam**5))/ (np.exp((self.h*self.c)/(lam*self.k_B*T2))-1)
      
         flam = (flam1 + flam2)*1e-8 #to erg / s / A
 
@@ -389,16 +398,16 @@ class BBFit:
         
         w0 = 4000 #p[0] #Refernce wavelength
         alpha = p[0]
-        R1 = (p[1] * u.Rsun).to(u.cm)
+        R1 = p[1]
         a_v = p[2]
-        
+            
         f = ps.PowerLaw(w0, alpha)
         f.convert('flam')
         
         flam = np.interp(lam, f.wave, f.flux)
         
         flux_red =  10**(-0.4 * extinction.fitzpatrick99(lam, a_v, unit='aa'))
-        area = np.pi * (4 * np.pi * R1**2)
+        area = 10**R1
 
         return area * flam * flux_red #.to(u.erg/u.s/u.Angstrom).value
 
@@ -520,12 +529,13 @@ class BBFit:
             R1 = p[1] 
             av = p[2]
             
-            logp = stats.norm.logpdf(alpha, -2./3, 2)
-            logp = logp + stats.uniform.logpdf(R1, 0, 5000)
+            logp = stats.uniform.logpdf(alpha, -3, 3)
+            logp = logp + stats.norm.logpdf(R1, 45, 10)
+            
             if av < 0 or av > 10:
                 logp = -np.inf
             else:
-                logp = logp + stats.norm.logpdf(av, self.av_host, self.av_host/2.)            
+                logp = logp + stats.uniform.logpdf(av, 0, 3.6)
         return logp	
 
     def _get_max_and_intervals(self, x):
@@ -625,25 +635,21 @@ class BBFit:
                 self.Rsecerr2 = Rsec2 - Rsec
         else:
             alpha1, alpha, alpha2 =  self._get_max_and_intervals(self.sampler.flatchain[:,0])
-            A1, A, A2 =  self._get_max_and_intervals(self.sampler.flatchain[:,1])
+            R1, R, R2 =  self._get_max_and_intervals(self.sampler.flatchain[:,1])
             Av1, Av, Av2 = self._get_max_and_intervals(self.sampler.flatchain[:,2])
         
             self.alpha = alpha
             self.alphaerr1 = alpha - alpha1
             self.alphaerr2 = alpha2 - alpha
             
-            self.A = A
-            self.Aerr1 = A - A1
-            self.Aerr2 = A2 - A
+            self.R = R
+            self.Rerr1 = R - R1
+            self.Rerr2 = R2 - R
             
             self.Av = Av
             self.Averr1 = Av - Av1
             self.Averr2 = Av2 - Av
 
-            R = self._area2rsun(10**A) #Rsun
-            R1 = self._area2rsun(10**A1)
-            R2 = self._area2rsun(10**A2)
-            
             
     def _get_bol_lum(self, T, R):
         '''
@@ -689,8 +695,10 @@ class BBFit:
         '''
 
 
-        # generate the data     
-        self.wls, self.fluxes, self.fluxerrs = self._band2flux()
+        # generate the data  
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")   
+            self.wls, self.fluxes, self.fluxerrs = self._band2flux()
 
         #Plot the raw fluxes before correcting them.
         '''if (plot):
@@ -724,10 +732,10 @@ class BBFit:
         self.fluxes = self.fluxes * fluxFactor
         self.fluxerrs = self.fluxerrs * fluxFactor
 
-        #self._initialize_parameters(plot)
+        self._initialize_parameters(plot)
 
 
-    def _initialize_parameters(self, plot=False):
+    def _initialize_parameters(self, plot=True):
         '''
         Runs the least squares optimiztion routine to find the best initial parameters 
         to start the MCMC with.
@@ -768,20 +776,20 @@ class BBFit:
                 
         if self.model == "PowerLaw":
 
-            params, covar = curve_fit(self._model_powerlaw_2, self.wls , self.fluxes, \
-            p0=(self.alpha, self.initR1, self.av_host), sigma=self.fluxerrs, absolute_sigma=True, maxfev = 10000)
+            #params, covar = curve_fit(self._model_powerlaw_2, self.wls , self.fluxes, \
+            #p0=(self.alpha, self.initR1, self.av_host), sigma=self.fluxerrs, absolute_sigma=True, maxfev = 10000)
             
-            alpha = params[0]
-            R = params[1]
-            av = params[2]
+            #alpha = params[0]
+            #R = params[1]
+            #av = params[2]
             
-            self.alpha = alpha
-            self.R1 = R
-            self.av_host = av
+            #self.alpha = alpha
+            #self.R1 = R
+            #self.av_host = av
                         
             if plot:
                 lam = np.linspace(3000, 25000, 2000)
-                fluxpw = self._model_powerlaw_2(lam, alpha, R, av)
+                fluxpw = self._model_powerlaw_2(lam, self.alpha, self.initR1, self.av_host)
                 
                 plt.clf()
                 plt.plot(lam, fluxpw, label="Best fit %s"%self.model)
@@ -791,6 +799,7 @@ class BBFit:
                 plt.legend()
                 name = self._get_save_path(None, "fluxes_obs_LSQ_fit")
                 plt.savefig(name, dpi=200)
+                print ("Saved fit as %s"%name)
     
     
     def run(self):
@@ -933,7 +942,7 @@ class BBFit:
          
         plt.xlabel("Wavelength [$\\AA$]")
         plt.ylabel("log Flux")
-        plt.ylim(ymin=np.min(self.fluxes) * 0.8)
+        #plt.ylim(ymin=np.min(self.fluxes) * 0.8)
         plt.yscale("log")
         plt.legend()
         name = self._get_save_path(None, "mcmc_best_fit_model")

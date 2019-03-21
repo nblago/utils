@@ -4,7 +4,7 @@ Created on Thu Dec 13 12:09:28 2018
 
 @author: nadiablago
 """
-import BBFit
+from model import BBFit
 import numpy as np
 from matplotlib import pylab as plt
 
@@ -37,6 +37,31 @@ def set_nova_phot(bb):
     bb.initT2 = 5000
     bb.initR2 = 1
     
+def set_last_nova_phot():
+
+    #aperture = 1.5 * FWHM
+
+    bb.bands = np.array(["u,sdss", "g,sdss", "i,sdss"])  #"r,sdss"
+    bb.mags = np.array([10.686, 10.610, 10.5075]) #9.8342
+    bb.magerrs = np.array([0.08, 0.05, 0.022]) #0.000410
+    bb.photsys = np.array(["abmag", "abmag", "abmag"])
+    
+
+
+    #Day the photometry was taken
+    bb.mjd = 58550.1
+    bb.distMpc = 2.3e-3
+    bb.av_mw = 0.5
+    bb.av_host = 0
+    
+    #Set some initial parameters for the fit
+    bb.initT1 = 10000
+    bb.initR1 = 1
+    
+    bb.initT2 = 5000
+    bb.initR2 = 1
+    
+    bb.model = "BlackBody2"    
     
     
 def set_progenitor_phot(bb):
@@ -55,7 +80,7 @@ def set_progenitor_phot(bb):
     bb.initR2 = 5
     
     bb.distMpc = 2.3e-3
-    bb.av_mw = 4
+    bb.av_mw = 0.5
     bb.av_host = 0 #0.5
 
 def set_progenitor_powerlaw(bb):
@@ -102,18 +127,20 @@ bb = BBFit.BBFit()
 
 #Set to the right photometric measurements
 #set_progenitor_powerlaw(bb)
-set_progenitor_phot(bb)
+#set_progenitor_phot(bb)
 #set_nova_phot(bb)
+set_last_nova_phot()
 
 #Set the MCMC parameters
-bb.niterations = 2000
-bb.burnin = 800
+bb.niterations = 1000
+bb.burnin = 10
 bb.nwalkers = 20
 
 #Set the plotting directory
-bb.plotdir = "../plots" 
+bb.plotdir = "plots/" 
 
 bb.model = "BlackBody2"
+#bb.model = "PowerLaw"
 
 #Initialize     
 bb.initialize(plot=True)
@@ -161,13 +188,13 @@ if (bb.model == "PowerLaw"):
     bb.plot_corner_posteriors(labels=['alpha', 'scale', "A_v"])
 
     print (    bb.alpha, bb.alphaerr1, bb.alphaerr2, \
-    bb.A, bb.Aerr1, bb.Aerr2, \
+    bb.R, bb.Rerr1, bb.Rerr2, \
     bb.Av, bb.Averr1, bb.Averr2)
     
     print ('''
                 alpha:    %.1f -%.1f +%.1f
-                log(Area/cm2):  %.2f -%.2f +%.2f
+                Scale (R):  %.2f -%.2f +%.2f
                 Av       %.1e -%.1e +%.1e L$_{\odot}$'''%(\
     bb.alpha, bb.alphaerr1, bb.alphaerr2, \
-    bb.A, bb.Aerr1, bb.Aerr2, \
+    bb.R, bb.Rerr1, bb.Rerr2, \
     bb.Av, bb.Averr1, bb.Averr2))
