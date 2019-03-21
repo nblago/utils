@@ -7,7 +7,6 @@ Created on Tue Mar  7 13:26:06 2017
 from __future__ import print_function
 
 
-from urllib.request import HTTPError
 import datetime
 from astropy.io import votable
 import numpy as np
@@ -26,10 +25,13 @@ try:
     from urllib.request import urlopen
     from urllib.request import urlretrieve
     from urllib import request
+    from urllib.request import HTTPError
+
 except ImportError:
     # Fall back to Python 2's urllib2
     from urllib2 import urlopen
     from urllib import urlretrieve
+    from urllib2 import HTTPError
   
   
 class QueryCatalogue:
