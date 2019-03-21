@@ -137,7 +137,7 @@ bb.burnin = 10
 bb.nwalkers = 20
 
 #Set the plotting directory
-bb.plotdir = "plots/" 
+bb.plotdir = "data/plots/" 
 
 bb.model = "BlackBody2"
 #bb.model = "PowerLaw"

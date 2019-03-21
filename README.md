@@ -20,9 +20,9 @@ phot
 utils
 ```
 
-* model: offers the chance to fit black body emission spectrum to photometric datapoints. It converts the photometry into flux measurements. The MCMC code allows to bit: 1 black body, 1 black body + extinction, 2 black bodies, 2 black bodies plus extinction, 1 power law plus extinction.
+* model: offers the chance to fit black body emission spectrum to photometric datapoints. It converts the photometry into flux measurements. The MCMC code allows to bit: 1 black body, 1 black body + extinction, 2 black bodies, 2 black bodies + extinction, 1 power law + extinction.
 
-* phot: module to provide photometri measurements and zeropoint calibration. It has been designed with LCO format in mind, so it may require some changes to adapt to other telescopes.
+* phot: module to provide photometric measurements and zeropoint calibration. It has been designed with LCO format in mind, so it may require some changes to adapt to other telescopes.
 * utils: package with mixed utilities for management of fits files, creating finder charts from PS1 and SkyMapper images, queries to the Transient Name Server and time handling in astronomy.
 
 ### Prerequisites
@@ -47,7 +47,6 @@ From the utils directory, run:
 
 ```
 python setup.py install
-
 ```
 
 ## Authors

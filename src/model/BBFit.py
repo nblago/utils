@@ -59,7 +59,7 @@ class BBFit:
         self.alphaerr2 = 0
 
         #Location for plots
-        self.plotdir = "."
+        self.plotdir = "data/plots"
         
         #MCMC parameters
         self.method = 'ensemble' #or HA for Hastings
@@ -694,6 +694,8 @@ class BBFit:
         calculate the luminosity at each wavelength.
         '''
 
+        if (not os.path.isdir(self.plotdir)):
+            os.makedirs(self.plotdir)
 
         # generate the data  
         with warnings.catch_warnings():
