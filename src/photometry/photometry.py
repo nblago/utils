@@ -300,8 +300,8 @@ class Photometry:
         qc = QueryCatalogue.QueryCatalogue(ra, dec, sr/1.8, minmag, maxmag, self.logger)
 
         
-        cat_file = os.path.join(self._tmppath, 'query_result_%s_%.6f_%.6f_%.5f_%.2f_%.2f.txt'%(survey.split("/")[-1], ra, dec, sr, minmag, maxmag) )   
-        detected_stars_file = os.path.join(self._tmppath, 'detected_result_%s_%.6f_%.6f_%.5f_%.2f_%.2f.txt'%(survey.split("/")[-1], ra, dec, sr, minmag, maxmag) )   
+        cat_file = os.path.join(self._tmppath, 'query_result_%s_%.3f_%.3f_%.3f_%.2f_%.2f.txt'%(survey.split("/")[-1], ra, dec, sr, minmag, maxmag) )   
+        detected_stars_file = os.path.join(self._tmppath, 'detected_result_%s_%.3f_%.3f_%.3f_%.2f_%.2f.txt'%(survey.split("/")[-1], ra, dec, sr, minmag, maxmag) )   
             
         #Check if the query already exists in our tmp directory,
         #so we do not need to query it again.
@@ -513,10 +513,10 @@ class Photometry:
         positions = SkyCoord(ras*u.deg, decs*u.deg, frame='icrs')
         
         # Set aperture radius to three times the fwhm radius
-        aperture_rad = np.median(fwhm)*2* u.arcsec    
+        aperture_rad = np.median(fwhm)*1.5* u.arcsec    
         aperture = SkyCircularAperture(positions, r=aperture_rad)
         
-        annulus_apertures = SkyCircularAnnulus(positions, r_in=aperture_rad*2, r_out=aperture_rad*4)
+        annulus_apertures = SkyCircularAnnulus(positions, r_in=aperture_rad*2.5, r_out=aperture_rad*4)
     
         #Convert to pixels
         pix_aperture = aperture.to_pixel(wcs)
@@ -540,12 +540,13 @@ class Photometry:
             y = c[:,1]
             
             plt.figure(figsize=(10,10))
-            norm = simple_norm(data, 'sqrt', percent=99)
+            data_cut = data[int(x[0])-100: int(x[0])+100, int(y[0])-100: int(y[0])+100]
+            norm = simple_norm(data_cut, 'sqrt', percent=99)
             plt.imshow(data, norm=norm)
             pix_aperture.plot(color='white', lw=2)
             pix_annulus.plot(color='red', lw=2)
-            plt.xlim(x[0]-200, x[0]+200)
-            plt.ylim(y[0]-200, y[0]+200)
+            plt.xlim(int(x[0])-200, int(x[0])+200)
+            plt.ylim(int(y[0])-200, int(y[0])+200)
             plt.title('Apertures for filter %s'%filt)
             plt.savefig(os.path.join(self._plotpath, "apertures_cutout_%s.png"%os.path.basename(imagefile)))
             plt.clf()
@@ -607,13 +608,13 @@ class Photometry:
             #Save the photometry into a file
             if (not os.path.isfile(appfile)):
                 with open(appfile, 'w') as f:
-                    f.write("mjd filter instr_mag zp zperr color kcoef mag magerr\n")
+                    f.write("filename mjd filter instr_mag zp zperr color kcoef mag magerr\n")
             
     
             with open(appfile, 'a') as f:
                 self.logger.info('Adding aperture photometry to file %s'%appfile)
 
-                f.write("%.3f %s %.4f %.4f %.4f %s %.4f %.4f %.4f\n"%(mjd, filt, phot['inst_mag'].data[0], \
+                f.write("%s %.3f %s %.4f %.4f %.4f %s %.4f %.4f %.4f\n"%(os.path.basename(imagefile), mjd, self.filter_dic.get(filt, filt), phot['inst_mag'].data[0], \
                     zp, zperr, color, kcoef, phot['inst_mag'].data[0]+ zp, phot['err_mag'].data[0]))
 
 
@@ -690,7 +691,7 @@ class Photometry:
              plt.ylabel('ZP [mag]')
              plt.title("%d stars for ZP calibration in %s band"%(len(t[filt][mask_good]), filt))
              plt.tight_layout()
-             plt.savefig(os.path.join(self._plotpath,"zp_cal_%s_%s.png"%(filt, col_filt)))
+             plt.savefig(os.path.join(self._plotpath,"zp_cal_%s_%s_%s.png"%(os.path.basename(imgfile), filt, col_filt)))
              plt.clf()
          
          
@@ -758,7 +759,7 @@ class Photometry:
             plt.ylabel('ZP$_{obs}$ - ZP$_{pred}$ [mag]')
             plt.legend()
             plt.tight_layout()
-            plt.savefig(os.path.join(self._plotpath,"zp_colorterm_%s_%s.png"%(filt, col_filt)))
+            plt.savefig(os.path.join(self._plotpath,"zp_colorterm_%s_%s_%s.png"%(os.path.basename(imgfile), filt, col_filt)))
             plt.clf()
          
         self.logger.info("ZP median: %.4f STD: %.4f"%(np.median(zp_vec),np.std(zp_vec)))
@@ -812,12 +813,16 @@ def measure_mag(imgfile, ra=None, dec=None, ext=1):
     p.initialize_logger()
 
     #Header and imaging data are in extension 1.
-    p.ext = 1
+    p.ext = ext
 
     #Extract the filter from extension 1
     filt_original = fitsutils.get_par(imgfile, "FILTER", p.ext)
     filt = p.filter_dic.get(filt_original, filt_original)
-    print ("Original FILTER", filt, "New filter", filt)
+    print ("Original FILTER", filt_original, "New filter", filt)
+    if filt is None:
+        print ("Could not find the keyword FILTER in the header in extension %d."%ext)
+        print ("Please check that the extension you setected has data.")
+        
 
     #Check which survey we should query provided the filter the data was taken.    
     if filt in survey_dic.keys():
