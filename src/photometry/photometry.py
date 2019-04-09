@@ -190,16 +190,19 @@ class Photometry:
                 X, Y = np.meshgrid(x, y)
             
                 #(xdata_tuple, amplitude, xo, yo, def_fwhm, def_fwhm, theta, offset):
-                def_x = np.argmax(np.sum(sub, axis=0))
-                def_y = np.argmax(np.sum(sub, axis=1))
+                def_x = hrad#np.argmax(np.sum(sub, axis=0))
+                def_y = hrad#np.argmax(np.sum(sub, axis=1))
         
                 initial_guess = (100, def_x, def_y, def_fwhm, def_fwhm, 0, np.percentile(sub, 40))
                 popt, pcov = opt.curve_fit(self._twoD_Gaussian, (X, Y), sub.flatten(), p0=initial_guess, maxfev = 5000)
-                fwhm_x = np.abs(popt[3])*2*np.sqrt(2*np.log(2))
-                fwhm_y = np.abs(popt[4])*2*np.sqrt(2*np.log(2))
                 amplitude=popt[0]
+                xpos = popt[1]
+                ypos = popt[2]
+                fwhm_x = np.abs(popt[3])*2*np.sqrt(2*np.log(2))*pix2ang
+                fwhm_y = np.abs(popt[4])*2*np.sqrt(2*np.log(2))*pix2ang
                 background=np.maximum(0.001, popt[-1])
-                detected = ~np.isnan(fwhm_x)*~np.isnan(fwhm_y)*(amplitude > 1)*(0.5<(fwhm_y/fwhm_x)<2) * (amplitude/background > 0.2)
+                detected = ~np.isnan(fwhm_x)*~np.isnan(fwhm_y)*(amplitude > 1)*(0.33<(fwhm_y/fwhm_x)<3) \
+                    * (amplitude/background > 0.5) * (np.abs(xpos)<2*hrad) * (np.abs(ypos)<2*hrad) 
     
             #We exceeded the number of iterations, meaning the Gaussian is not there
             except RuntimeError:
@@ -211,9 +214,12 @@ class Photometry:
     
             
             if (detected):
-                self.logger.debug("%s %s Amplitude %.3f\t BG %.3f\t BG_stats %.3f\t  FWHM_x,FWHM_y=(%.3f, %.3f)"%\
-                    (i, detected, amplitude, background, np.percentile(sub, 50), fwhm_x, fwhm_y))
-            
+                self.logger.debug("DETECTED: %d %d, %s %s Amplitude %.3f\t BG %.3f\t BG_stats %.3f\t  FWHM_x,FWHM_y=(%.3f, %.3f)"%\
+                    (xpos, ypos, i, detected, amplitude, background, np.percentile(sub, 50), fwhm_x, fwhm_y))
+            else:
+                self.logger.debug("NOT DETECTED: %d %d %s %s Amplitude %.3f\t BG %.3f\t BG_stats %.3f\t  FWHM_x,FWHM_y=(%.3f, %.3f)"%\
+                    (xpos, ypos, i, detected, amplitude, background, np.percentile(sub, 50), fwhm_x, fwhm_y))
+                    
             #Fill the data with the best fit parameters of the star.
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -230,15 +236,17 @@ class Photometry:
                 ax2.imshow(sub-data_fitted.reshape(sub.shape[0], sub.shape[1]), cmap=plt.cm.jet, origin='bottom', extent=(x.min(), x.max(), y.min(), y.max()))
                 ax2.contour(X, Y, data_fitted.reshape(sub.shape[0], sub.shape[1]), 5, colors='w')
                 ax.scatter(def_x, def_y, marker="*", s=100, color="yellow")
-                plt.savefig(os.path.join(os.path.dirname(imfile), self._plotpath, "gauss_%d"%i))
-                plt.clf()
+                figname = os.path.join( self._plotpath, os.path.basename(imfile)+"_gauss_%d.png"%i)
+                plt.savefig(figname)
+                plt.close()
             if ((not detected) & plot):           
                 fig, ax = plt.subplots(1)
                 ax.hold(True)
                 ax.imshow(sub, cmap=plt.cm.jet, origin='bottom', extent=(x.min(), x.max(), y.min(), y.max()))
                 plt.title("NOT DETECTED X,Y = %d,%d\n S/N:%.2f %.2f %.2f"%(x_i,y_i, amplitude/background, fwhm_x, fwhm_y))
-                plt.savefig(os.path.join(os.path.dirname(imfile), self._plotpath, "ngauss_%d"%i))
-                plt.clf()
+                figname = os.path.join( self._plotpath, os.path.basename(imfile)+"_ngauss_%d.png"%i)
+                plt.savefig(figname)
+                plt.close()
                 
         return out
 
@@ -422,7 +430,7 @@ class Photometry:
         out = self._find_fwhm(imfile, catalog_det['xpos'], catalog_det['ypos'], plot=debug)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            mask_valid_fwhm = ( ~np.isnan(out['fwhm']) *  ~np.isnan(out['e']) * out['detected'] * (out['e']>0.6) * (out['fwhm'] < 10))            
+            mask_valid_fwhm = ( ~np.isnan(out['fwhm']) *  ~np.isnan(out['e']) * out['detected'] * (out['e']>0.5) * (out['fwhm'] < 10))            
     
         self.logger.info("Left %d stars with valid fwhm."%np.count_nonzero(mask_valid_fwhm))
         
@@ -433,16 +441,16 @@ class Photometry:
         #Add the FWHM of each detection to the detected stars list
         outd = out[mask_valid_fwhm]
         catalog_det = catalog_det[mask_valid_fwhm]
-        fwhm = Column(data=outd['fwhm']*pix2ang, name='fwhm')
+        fwhm = Column(data=outd['fwhm'], name='fwhm')
         catalog_det.add_column(fwhm)
 
         #Write it to the header as well        
-        fitsutils.update_par(imfile, "FWHM", np.median(outd['fwhm']*pix2ang), ext=self.ext)
+        fitsutils.update_par(imfile, "FWHM", np.median(outd['fwhm']), ext=self.ext)
 
         
         catalog_det.write(detected_stars_file, format="ascii", overwrite=True)
         
-        self.logger.info( 'Average FWHM %.1f pixels, %.3f arcsec'%(np.median(outd['fwhm']),  np.median(outd['fwhm'])*pix2ang))
+        self.logger.info( 'Average FWHM %.1f pixels, %.3f arcsec'%(np.median(outd['fwhm'])/pix2ang,  np.median(outd['fwhm'])))
         
             
         self.logger.info( "Found %d stars in %s. "%(len(catalog), survey)+ \
@@ -714,7 +722,7 @@ class Photometry:
         '''
          
          #Select the stars above
-        detected_stars_file = self._extract_star_sequence(imgfile, survey=survey, minmag=minmag, maxmag=maxmag)
+        detected_stars_file = self._extract_star_sequence(imgfile, survey=survey, minmag=minmag, maxmag=maxmag, debug=False)
 
         if not detected_stars_file:
             return 0, 0, 0 
@@ -916,8 +924,9 @@ class Photometry:
     
         
         #Compute the zeropoint
-        #For that here we select stars between 14 and 20.5 mag.
-        zp, zp_err, colorterm = self.get_zeropoint(imgfile, survey=survey, filt=filt, col_filt=self.col_dic[filt], minmag=10, maxmag=20.5, plot=True)
+        #For that here we select stars between 15 and 19.5 mag.
+        zp, zp_err, colorterm = self.get_zeropoint(imgfile, survey=survey, filt=filt, \
+            col_filt=self.col_dic[filt], minmag=15, maxmag=19.5, plot=True)
     
         if zp == 0:
             self.logger.error("There were not enough stars to compute a reliable zeropoint for image %s. Skipping..."%imgfile)
