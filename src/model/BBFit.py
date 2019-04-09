@@ -419,6 +419,73 @@ class BBFit:
 
         return self._model_powerlaw(lam, (alpha, R1, a_v))
         
+
+    def _model_accretion_disk2(self, lam, Mstar, Rstar, Macc, scale, a_v):
+        '''
+        Return units: erg s-1 A-1
+        As we multiply by the area of the emitting source (in cm**2)
+        '''
+
+        return self._model_accretion_disk(lam, (Mstar, Rstar, Macc, scale, a_v))
+        
+    def _model_accretion_disk(self, lam, p):
+        '''
+        Equation 1 from Kenyon, Hartmann, Hewett 1988.
+        '''    
+        Mstar = p[0]
+        Rstar = p[1]
+        Macc = p[2]
+        scale = p[3]
+        a_v = p[4]
+        
+        R = np.linspace(1,20,100)
+        R = R[R>Rstar]
+        if len(R)==0 or Mstar<0 or Macc<0 or Rstar<0 or a_v<0 or scale<0:
+            return np.ones(len(lam))*np.inf
+            
+        F_r = (3 * cnt.G * Mstar * u.Msun * Macc * u.Msun/u.year / 8 / np.pi / (u.Rsun*Rstar)**3) * (Rstar/R)**3 * (1 - (Rstar/R)**0.5)
+        F_r = F_r.to(u.erg/u.cm**2/u.s)
+        T_r = ((F_r / cnt.sigma_sb)**0.25).to(u.K)
+        
+        T_max = 13000 * u.K *(Mstar)**0.25 * (Macc / 1e-5)**0.25 * (Rstar)**-0.75
+        
+        #Cretae the disk model
+        #For each differential radii, we compute the black body spectra corresponding 
+        # to the temperature at that radius, and scale it by the flux expected at that
+        # radius.
+        
+        disk_model = []
+        for i, ri in enumerate(R):
+            #if ri >= 1 and ri<=1.5:
+            if ri >= 1 and ri<=1.5:
+                sp = ps.BlackBody(T_max.value)
+                #sp = ps.BlackBody(T_r[i].value)
+
+            else:
+                sp = ps.BlackBody(T_r[i].value)
+            sp.convert('flam')
+            tot_flux = sp.trapezoidIntegration(sp.wave, sp.flux)
+            scaled_flux = sp.flux / tot_flux * F_r[i].value
+            disk_model.append(scaled_flux)
+            
+        disk = np.array(disk_model)
+        disk = np.nansum(disk, axis=0)
+        
+        sp = ps.ArraySpectrum(sp.wave, disk)
+    
+        #int_flux = sp.trapezoidIntegration(sp.wave, sp.flux)
+        int_flux = np.max(sp.flux)
+
+
+        #Normalize the integral flux to 1
+        flux_norm= sp.flux /int_flux
+        #sp_norm = ps.ArraySpectrum(sp.wave, flux_norm)
+                
+        flux_norm =  np.interp(lam, sp.wave, flux_norm)
+        flux_red =  10**(-0.4 * extinction.fitzpatrick99(lam, a_v, unit='aa'))
+
+        return scale *flux_norm * flux_red
+        
     #likelihood function
     def _like(self, p, xdat, ydat, errdat, debug=False):
         '''
@@ -802,7 +869,30 @@ class BBFit:
                 name = self._get_save_path(None, "fluxes_obs_LSQ_fit")
                 plt.savefig(name, dpi=200)
                 print ("Saved fit as %s"%name)
-    
+        if self.model == 'Disk':
+            
+            p0 = (0.8, 0.02, 1e-8, 1, 0.1)
+
+            fluxes_norm = self.fluxes / np.max(self.fluxes)
+            params, covar = curve_fit(self._model_accretion_disk2, self.wls , fluxes_norm, \
+            p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
+            
+            print ("LSQ fit:  Mstar:", params[0], " Rstar", params[1], "Macc ", \
+                params[2], "scale", params[3], "a_v", params[4])
+
+            sp = ps.BlackBody(100)
+            lam = sp.wave
+            flux_disk = self._model_accretion_disk2(lam, params[0], params[1], params[2], params[3], params[4])
+            plt.clf()
+            plt.errorbar(self.wls, fluxes_norm, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
+            plt.plot(lam, flux_disk, lw=3)
+            plt.xlabel("Wavelength [$\\mu$m]")
+            plt.ylabel("Flux [erg/cm$^2$/s]")
+            plt.ylim(np.nanmin(fluxes_norm)*0.9, np.nanmax(fluxes_norm)*1.2)
+            plt.legend()
+            name = self._get_save_path(None, "fluxes_obs_LSQ_fit_disk")
+            plt.savefig(name, dpi=200)
+            print ("Saved fit as %s"%name)
     
     def run(self):
         '''

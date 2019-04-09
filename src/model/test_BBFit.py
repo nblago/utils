@@ -4,7 +4,7 @@ Created on Thu Dec 13 12:09:28 2018
 
 @author: nadiablago
 """
-from model import BBFit
+import BBFit
 import numpy as np
 from matplotlib import pylab as plt
 
@@ -43,7 +43,7 @@ def set_last_nova_phot():
 
     bb.bands = np.array(["u,sdss", "g,sdss", "i,sdss"])  #"r,sdss"
     bb.mags = np.array([10.686, 10.610, 10.5075]) #9.8342
-    bb.magerrs = np.array([0.08, 0.05, 0.022]) #0.000410
+    bb.magerrs = np.array([0.08, 0.05, 0.022]) #0.06
     bb.photsys = np.array(["abmag", "abmag", "abmag"])
     
 
@@ -80,7 +80,7 @@ def set_progenitor_phot(bb):
     bb.initR2 = 5
     
     bb.distMpc = 2.3e-3
-    bb.av_mw = 0.5
+    bb.av_mw = 0.0#5
     bb.av_host = 0 #0.5
 
 def set_progenitor_powerlaw(bb):
@@ -132,14 +132,16 @@ bb = BBFit.BBFit()
 set_last_nova_phot()
 
 #Set the MCMC parameters
-bb.niterations = 1000
-bb.burnin = 10
+bb.niterations = 20000
+bb.burnin = 5000
 bb.nwalkers = 20
 
 #Set the plotting directory
 bb.plotdir = "data/plots/" 
 
 bb.model = "BlackBody2"
+
+#bb.model = "Disk"
 #bb.model = "PowerLaw"
 
 #Initialize     

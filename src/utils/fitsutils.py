@@ -211,13 +211,22 @@ def unify_header(prihdr):
     
     try:
         telescope = prihdr["TELESCOP"]
-    except:
+        print ("telescope: %s detected!"%telescope)
+    except KeyError:
         try:
             telescope = prihdr["HIERARCH FPA.TELESCOPE"]
         except:
             print ("Could not locate the telescope field") 
             return
-        
+
+    #Compute the pixel size
+    wcs = WCS(prihdr)
+    
+    world0 = wcs.wcs_pix2world([[0,0]], 1)
+    world1 = wcs.wcs_pix2world([[1,1]], 1)
+    pixsize = (world1 - world0)[0][1]*3600 #arcsec / pix
+    dic["PIXSCALE"] = pixsize
+            
     if telescope == "NOT":
         dic["EXPTIME"] = prihdr["EXPTIME"]
         dic["AIRMASS"] = prihdr["AIRMASS"]
@@ -230,6 +239,7 @@ def unify_header(prihdr):
             dic["GAIN"] = prihdr["GAIN1"]
             dic["RDNOISE"] = prihdr["RDNOISE1"]
             dic["FILTER"] = prihdr["NCFLTNM2"]
+            
             
     elif telescope == "UKIRT":
         dic["GAIN"] = prihdr["GAIN"]
@@ -246,7 +256,6 @@ def unify_header(prihdr):
         dic["FILTER"] = prihdr["HIERARCH FPA.FILTERID"]
         dic["MJD-OBS"] = prihdr["MJD-OBS"]
     elif telescope == "INT":
-            
         dic["GAIN"] = prihdr["GAIN"]
         if ("RDNOISE" in prihdr.keys()):
             dic["RDNOISE"] = prihdr["RDNOISE"]
@@ -307,7 +316,17 @@ def unify_header(prihdr):
                 dic["RDNOISE"] = 3.5
             else:
                 dic["RDNOISE"] = 9
-        
+
+    elif telescope == "Palomar 200":
+        if (prihdr["INSTRUME"]=="WIRC"):
+            dic["GAIN"] = prihdr["GAIN"]
+            dic["EXPTIME"] = prihdr["EXPTIME"]
+            dic["AIRMASS"] = prihdr["AIRMASS"]
+            dic["FILTER"] = prihdr["FILTER"]
+            dic["MJD-OBS"] = prihdr["MJD"]
+            dic["RDNOISE"] = prihdr["EFFRN"]
+            
+                
     else:
         print ("Telescope unknown!") 
     

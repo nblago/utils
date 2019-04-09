@@ -192,11 +192,13 @@ class QueryCatalogue:
                 self.rad = 0.25
                 return self.query_catalogue(catalogue=catalogue, filtered=filtered, tmpdir=tmpdir)
 
-        if catalog.as_array() is None:
+        '''if catalog.as_array() is None:
             #Clean temporary file.
             if (os.path.isfile(tmp_file)):
                 os.remove(tmp_file)
-            return None
+            return None'''
+
+        self.logger.info("First row catalogue: %s:"%catalog[0])
 
         catalog = catalog.as_array().data
 
