@@ -130,21 +130,20 @@ def Gbp_Grp(gr=None, gi=None, gz=None, ri=None):
 
 def getColorPos(gr, gi, gz, ri, pos):
 	'''
-		Returns the Gaia coded color for the position pos.
-	
+	Returns the Gaia coded color for the position pos.	
 	'''
 	vec = {"gr":gr, "gi":gi, "gz":gz, "ri":ri}
-
+	veco = {}    
 	for i in vec.keys():
-		if vec[i] == None:
-			del vec[i]
+		if not vec[i] is None:
+			veco[i]= vec[i]
 
-	ncols = len(vec)
+	ncols = len(veco)
 	
 	if ncols == 1:
-		return give_coefs_1_color(vec, pos)
+		return give_coefs_1_color(veco, pos)
 	elif ncols == 2:
-		return give_coefs_2_color(vec, pos)
+		return give_coefs_2_color(veco, pos)
 	else:
 		print ("Provide 1 or 2 colors please")
 		return None
@@ -153,12 +152,13 @@ def give_coefs_1_color(vec, pos):
 	'''
 		Retrieves color coefficients for 1 color.
 	'''
-	col_name = vec.keys()[0]
-	col_vec = np.array(vec.values()[0])
+	col_name = list(vec.keys())[0]
+	col_vec = list(vec.values())[0]
 	try:
-		dat = np.loadtxt("data/sdss_{:}.dat".format(col_name), usecols=(0, 1, 2, 3))
+		path = os.path.join(os.getcwd(),  "../../data/sdss_{:}.dat".format(col_name)) 
+		dat = np.loadtxt(path, usecols=(0, 1, 2, 3))
 	except:
-		print ("File not found: data/sdss_{:}.dat".format(col_name))
+		print ("File not found: {:}".format(path))
 		return None
 	coefs = np.array(dat[pos])
 	
@@ -172,10 +172,10 @@ def give_coefs_2_color(vec, pos):
 	col_names = vec.keys()
 	col_vec = np.array(vec.values(), ndmin=2)
 	try:
-		path = os.getcwd()
-		dat = np.loadtxt("{:}/data/sdss_{:}_{:}.dat".format(path,col_names[1], col_names[0]), usecols=range(0, 8))
+		path = os.path.join(os.getcwd(),  "../../data/sdss_{:}_{:}.dat".format(col_names[1], col_names[0])) 
+		dat = np.loadtxt(path, usecols=(0, 1, 2, 3))
 	except:
-		print ("File not found: {:}/data/sdss_{:}_{:}.dat".format(path, col_names[1], col_names[0]))
+		print ("File not found: {:}".format(path))
 		return None
 	coefs = np.array(dat[pos])
 
