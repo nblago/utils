@@ -7,110 +7,73 @@ Created on Thu Dec 13 12:09:28 2018
 import BBFit
 import numpy as np
 from matplotlib import pylab as plt
+from astropy import units as u
 
-def set_nova_phot(bb):
     
-    #Set the photometry
-    #bb.bands = np.array(["B", "V", "R", "I", "Y", "J", "H", "K"])
-    bb.bands = np.array(["B", "V", "I", "Y", "J", "H", "K"])
-
-    #JD 2458203.6
-    #bb.mags = np.array([6.995, 6.004, 5.290, 4.832, 4.906, 4.71, 4.33, 3.90])
-    #bb.magerrs = np.array([0.13, 0.09, 0.1, 0.125, 0.04, 0.1, 0.1, 0.1, 0.1])
-    
-    #JD 2458211.6
-    #
-    bb.mags = np.array([7.212, 6.587, 5.285, 5.108, 4.827, 4.523, 4.083])
-    bb.magerrs = np.array([0.13, 0.09, 0.125, 0.04, 0.1, 0.1, 0.1, 0.1])
-    bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag"])
-
-    #Day the photometry was taken
-    bb.mjd = 58211.1
-    bb.distMpc = 2.3e-3
-    bb.av_mw = 0
-    bb.av_host = 1
-    
-    #Set some initial parameters for the fit
-    bb.initT1 = 10000
-    bb.initR1 = 1
-    
-    bb.initT2 = 5000
-    bb.initR2 = 1
-    
-def set_last_nova_phot():
-
-    #aperture = 1.5 * FWHM
-
-    bb.bands = np.array(["u,sdss", "g,sdss", "i,sdss"])  #"r,sdss"
-    bb.mags = np.array([10.686, 10.610, 10.5075]) #9.8342
-    bb.magerrs = np.array([0.08, 0.05, 0.022]) #0.06
-    bb.photsys = np.array(["abmag", "abmag", "abmag"])
-    
+def set_2bb_phot(bb):
 
 
-    #Day the photometry was taken
-    bb.mjd = 58550.1
-    bb.distMpc = 2.3e-3
-    bb.av_mw = 0.5
-    bb.av_host = 0
+    #Source photometry
+    bb.bands = np.array(["omegacam,u", "omegacam,g", "omegacam,r",   \
+    "omegacam,i", "paranal,J", "paranal,H"])
+    bb.mags = np.array([19.46, 20.13,  19.5, 19.18, 18.58, 18.41])
+    bb.magerrs = np.array([0.05, 0.03,  0.03, 0.04, 0.06, 0.1])
+    bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag"])
     
-    #Set some initial parameters for the fit
-    bb.initT1 = 10000
-    bb.initR1 = 1
-    
-    bb.initT2 = 5000
-    bb.initR2 = 1
-    
-    bb.model = "BlackBody2"    
-    
-    
-def set_progenitor_phot(bb):
-
-
-    #Progenitor photometry
-    bb.bands = np.array(["omegacam,u", "omegacam,g", "omegacam,Halpha", "omegacam,r", "omegacam,i", "paranal,J", "paranal,H", "paranal,Ks"])
-    bb.mags = np.array([20.67, 19.75, 18.02, 18.39, 17.59, 16.25, 15.69, 15.53] )
-    bb.magerrs = np.array([0.09, 0.02, 0.03, 0.02, 0.02, 0.05, 0.049, 0.061])
-    bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag"])
-        
     #Set some initial parameters for the fit
     bb.initT1 = 10000
     bb.initR1 = 5
     bb.initT2 = 5000
     bb.initR2 = 5
     
+    #Distance in Mpc
     bb.distMpc = 2.3e-3
-    bb.av_mw = 0.0#5
-    bb.av_host = 0 #0.5
+    #Fixed reddening inside of MW. It will be corrected before the fit.
+    bb.av_mw = 1.116 #+0.538#-0.385
+    #Initial guess for Av. It will only be used if the model is BlackBody_Av or BlackBody2_Av.
+    bb.av_host = 0 
 
-def set_progenitor_powerlaw(bb):
+
+def set_disk_phot(bb):
 
 
-    #Progenitor photometry
-    bb.bands = np.array(["omegacam,u", "omegacam,g", "omegacam,Halpha", "omegacam,r", "omegacam,i", "paranal,J", "paranal,H", "paranal,Ks"])
-    bb.mags = np.array([20.67, 19.75, 18.02, 18.39, 17.59, 16.25, 15.69, 15.53] )
-    bb.magerrs = np.array([0.09, 0.02, 0.03, 0.02, 0.02, 0.05, 0.049, 0.061])
-    bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag"])
-    
-    bb.distMpc = 2.3e-3
-    bb.av_mw = 0
-    bb.model = "PowerLaw"
+    #Source photometry
+    bb.bands = np.array(["omegacam,u", "omegacam,g", "omegacam,r",   \
+    "omegacam,i", "paranal,J", "paranal,H"])
 
+    bb.mags = np.array([19.46, 20.13,  19.5, 19.18, 18.58, 18.41])
+    bb.magerrs = np.array([0.05, 0.03,  0.03, 0.04, 0.06, 0.1])
+    bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "vegamag", "vegamag", "vegamag"])
 
     #Set some initial parameters for the fit
-    bb.alpha = 3./4
-    bb.initR1 = 1
-    bb.av_host = 3
+    bb.Mstar = 0.5
+    bb.Rstar = 0.1
+    bb.logMacc = -10.0
+    bb.R_out = 10.0
+    
+    #Distance in Mpc
+    bb.distMpc = 2.3e-3
+    bb.av_mw = 1.116#+0.538#-0.385##/
+    bb.av_host = 0 
     
 
-    
+
 def set_vega_phot(bb):
-    
+    '''
+    Test the code with Vega photometry.
+    The star parameters are:
+        Radius	      2.362 - 2.818 Rsun
+        Luminosity	      40.12 +/- 0.45 Lsun
+        Temperature	 (8,152 - 10,060 K)
+        Distance        7.68 pc
+    The fit should give something close (although not exactly the same due to blanketing
+    and other effects not accouned in the simple BB model).
+    '''
     #Vega test photometry
-    bb.bands =np.array(["B", "V", "R", "I"]) 
-    bb.mags=np.zeros(4) + 0.03
-    bb.magerrs = np.ones(4) * 0.01
-    bb.photsys = np.repeat("vegamag", 4)
+    bb.bands =np.array(["B", "V", "R", "I", "J", "K"]) 
+    bb.mags=np.array([0.03, 0.03, 0.07, 0.1, 0.02,	0.02])
+    bb.magerrs = np.ones(6) * 0.01
+    bb.photsys = np.repeat("vegamag", 6)
 
     bb.mjd = 0
     #Set the distance to the source and MW reddening
@@ -118,85 +81,44 @@ def set_vega_phot(bb):
     bb.av_mw = 0
 
     #Set some initial parameters for the fit
-    bb.initT1 = 10000
+    bb.initT1 = 9000
     bb.initR1 = 1
-    
+
+
 #Create an instance of the python class
 bb = BBFit.BBFit()
 
 
-#Set to the right photometric measurements
-#set_progenitor_powerlaw(bb)
-#set_progenitor_phot(bb)
-#set_nova_phot(bb)
-set_last_nova_phot()
+#Set to the photometric measurements and some parameters (distance, reddening)
+#And the initial guess values of the model.
+#set_2bb_phot(bb)
+#set_disk_ophot(bb)
+set_vega_phot(bb)
 
-#Set the MCMC parameters
-bb.niterations = 20000
-bb.burnin = 5000
+#Set the MCMC parameters. 
+#This values are just an quick check that the code works. 
+#Set the iteration to a larger number (50,000) and birning (5,000) for more precise results.
+bb.niterations = 3000
+bb.burnin = 1500
 bb.nwalkers = 20
 
 #Set the plotting directory
-bb.plotdir = "data/plots/" 
+bb.plotdir = "../../data/plots" 
+bb.resdir = "../../data/modelfits" 
 
-bb.model = "BlackBody2"
+#Select from: "BlackBody", "BlackBody_Av", "BlackBody2_av", "PowerLaw", "PowerLaw_BlackBody", "Disk"
+bb.model = "BlackBody"
 
-#bb.model = "Disk"
-#bb.model = "PowerLaw"
 
-#Initialize     
+#Initialize . If plot=True, it will also plot the model with the initial guess parameters.    
 bb.initialize(plot=True)
 
-#Run
+#Runs the MCMC and saves the best parameters to a results file within bb.resdir.
 bb.run()
-
 
 #Plot the best fit
 bb.plot_fit()
-
-#Plot the posterirs with the labels that we assigned to each parameter.
-if bb.model == "BlackBody2":
-    bb.plot_corner_posteriors(labels=['T1', 'R1', "T2", "R2"])
-elif bb.model.startswith("BlackBody"):
-    bb.plot_corner_posteriors(labels=['T1', 'R1', "A_v", "T2", "R2"])
-    
-#Write the best fit parameters
-if bb.model.startswith("BlackBody"):
-
-    #Prints the best parameters
-    print ('''
-                Temperature:    %.1f -%.1f +%.1f K
-                Radius:         %.1f -%.1f +%.1f R$_{\odot}$
-                Luminosity       %.1e -%.1e +%.1e L$_{\odot}$'''%(\
-    bb.T,bb.Terr1, bb.Terr2, \
-    bb.R, bb.Rerr1, bb.Rerr2, \
-    bb.L, bb.Lerr1, bb.Lerr2))
-
-if bb.model == "BlackBody_Av":
-    print ("            Av:    %.1f -%.1f +%.1f K"%(bb.Av, bb.Averr1, bb.Averr2))
-    
-if bb.model == "BlackBody2_Av":
-    print ("                Av:    %.1f -%.1f +%.1f K"%(bb.Av, bb.Averr1, bb.Averr2))
-    print ("                Temperature2:    %.1f -%.1f +%.1f K"%(bb.Tsec,bb.Tsecerr1, bb.Tsecerr2))
-    print ("                Radius2:         %.1f -%.1f +%.1f R$_{\odot}$"%(bb.Rsec, bb.Rsecerr1, bb.Rsecerr2))
-
-if bb.model == "BlackBody2":
-    print ("                Temperature2:    %.1f -%.1f +%.1f K"%(bb.Tsec,bb.Tsecerr1, bb.Tsecerr2))
-    print ("                Radius2:         %.1f -%.1f +%.1f R$_{\odot}$"%(bb.Rsec, bb.Rsecerr1, bb.Rsecerr2))
-
-
-if (bb.model == "PowerLaw"):
-    
-    bb.plot_corner_posteriors(labels=['alpha', 'scale', "A_v"])
-
-    print (    bb.alpha, bb.alphaerr1, bb.alphaerr2, \
-    bb.R, bb.Rerr1, bb.Rerr2, \
-    bb.Av, bb.Averr1, bb.Averr2)
-    
-    print ('''
-                alpha:    %.1f -%.1f +%.1f
-                Scale (R):  %.2f -%.2f +%.2f
-                Av       %.1e -%.1e +%.1e L$_{\odot}$'''%(\
-    bb.alpha, bb.alphaerr1, bb.alphaerr2, \
-    bb.R, bb.Rerr1, bb.Rerr2, \
-    bb.Av, bb.Averr1, bb.Averr2))
+#Plot the posterior distribution
+bb.plot_corner_posteriors()
+#Writes the best fit parameters to the standard output.
+bb.write_fit_params()
