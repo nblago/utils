@@ -39,7 +39,9 @@ except ImportError:
     from urllib import urlretrieve
     
 #Personal code inputs
-from photometry import QueryCatalogue
+import QueryCatalogue
+
+#from photometry import QueryCatalogue
 from utils import fitsutils
 
 
@@ -513,7 +515,7 @@ class Photometry:
         positions = SkyCoord(ras*u.deg, decs*u.deg, frame='icrs')
         
         # Set aperture radius to three times the fwhm radius
-        aperture_rad = np.median(fwhm)*2* u.arcsec    
+        aperture_rad = np.median(fwhm)*1.5* u.arcsec
         aperture = SkyCircularAperture(positions, r=aperture_rad)
         
         annulus_apertures = SkyCircularAnnulus(positions, r_in=aperture_rad*2, r_out=aperture_rad*4)
