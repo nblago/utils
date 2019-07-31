@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
    name='utils_git',
-   version='0.1',
+   version='0.21',
    description='Module with modeling and data reduction utilities.',
    author='Nadejda Blagorodnova',
    author_email='n.blagorodnova@astro.ru.nl',
