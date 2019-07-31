@@ -9,6 +9,6 @@ setup(
    author_email='n.blagorodnova@astro.ru.nl',
    packages=['model', 'photometry', 'utils'],  #same as name
    package_dir={'model': 'src/model', 'photometry':'src/photometry', 'utils':'src/utils'},
-   install_requires=['astropy', 'scipy', 'photutils', 'extinction', 'emcee', 'pysynphot', 'corner'], #external packages as dependencies
+   install_requires=['astroquery', 'astropy', 'scipy', 'photutils', 'extinction', 'emcee', 'pysynphot', 'corner'], #external packages as dependencies
    
 )
