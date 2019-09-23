@@ -24,12 +24,18 @@ from astropy.cosmology import FlatLambdaCDM
 from scipy.optimize import curve_fit
 import warnings
 
+os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
+# Add the environment variable which points to the filter response files for the bands we are interested in.
+if not 'PYSYN_CDBS' in os.environ.keys():
+    print("Adding the Pysynphot environment:")
+    os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
+print('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
 
 class BBFit:            
     
     def __init__(self):
         '''
-        Constructor initializes all the parameters to defaults.
+        Constructor initializes all the parameters to defaults.os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
         '''
         
         #Some predefined constants in the units we need them
@@ -134,16 +140,20 @@ class BBFit:
         #Set the plotting characteristics
         self._matplotlib_init()
         
-        #Add the environment variable which points to the filter response files for the bands we are interested in.
-        if not 'PYSYN_CDBS' in os.environ.keys():
-            print ("Adding the Pysynphot environment:")
-            os.environ['PYSYN_CDBS'] = "/Users/nadiablago/Documents/Software/pysynphot_files"
-        print ('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
+
     
         self.banddic = {"Y": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/ctio_y_andicam.dat"),
-                    "J": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_j_004_syn.fits"),
-                   "H": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_h_004_syn.fits"),
-                   "K": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_k_004_syn.fits"),
+                   "J": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_j_002.fits"),
+                   "H": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_h_002.fits"),
+                   "K": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_k_002.fits"),
+                   "keck,J": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Keck_NIRC2.J.dat"),
+                   "keck,H": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Keck_NIRC2.H.dat"),
+                   "keck,Ks": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Keck_NIRC2.Ks.dat"),
+                   "keck,K": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Keck_NIRC2.K.dat"),
+                   "3.6": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac1_3.6.txt"),
+                   "4.5": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac2_4.5.txt"),
+                   "5.8": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac3_5.8.txt"),               
+                   "8.0": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac4_8.0.txt"),
                    "spitzer,3.6": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac1_3.6.dat"),
                    "spitzer,4.5": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac2_4.5.dat"),
                    "spitzer,5.8": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/Spitzer_irac3_5.8.dat"),               

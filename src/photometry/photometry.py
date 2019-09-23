@@ -42,6 +42,7 @@ except ImportError:
 #Personal code inputs
 from photometry import QueryCatalogue
 from photometry import sextractor
+
 from utils import fitsutils
 
 
@@ -605,7 +606,7 @@ class Photometry:
         
         positions = SkyCoord(ras*u.deg, decs*u.deg, frame='icrs')
                         
-        # Set aperture radius to three times the fwhm radius
+        # Set aperture radius to "aperture" times the fwhm radius
         aperture_rad = np.median(fwhm)*self.aperture* u.arcsec    
         aperture = SkyCircularAperture(positions, r=aperture_rad)
         
