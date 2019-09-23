@@ -14,7 +14,6 @@ from matplotlib import pylab as plt
 import corner
 from astropy import units as u
 import astropy.constants as cnt
-import pysynphot as ps
 import os, sys
 import numpy as np
 import emcee
@@ -24,13 +23,10 @@ from astropy.cosmology import FlatLambdaCDM
 from scipy.optimize import curve_fit
 import warnings
 
-os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
-# Add the environment variable which points to the filter response files for the bands we are interested in.
-if not 'PYSYN_CDBS' in os.environ.keys():
-    print("Adding the Pysynphot environment:")
-    os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
-print('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
 
+
+import pysynphot as ps
+        
 class BBFit:            
     
     def __init__(self):
@@ -141,7 +137,6 @@ class BBFit:
         self._matplotlib_init()
         
 
-    
         self.banddic = {"Y": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/ctio_y_andicam.dat"),
                    "J": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_j_002.fits"),
                    "H": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/bessell_h_002.fits"),
@@ -214,7 +209,7 @@ class BBFit:
         fluxerr = np.array([])
         
         #Create a black body spectrum with an arbitrary value
-        lam = np.linspace(100, 80000, 10000)
+        lam = np.linspace(100, 120000, 10000)
         sp = ps.BlackBody(10000)
         sp.convert('flam')
 
@@ -247,7 +242,7 @@ class BBFit:
             m = m - extinction.fitzpatrick99(np.array([effwave]), a_v=self.av_mw, unit='aa')[0]
             
             #Normalize the spectrum to the magnitude of the observation
-            sp_norm = sp.renorm(m, psys, band)
+            sp_norm = sp.renorm(m, psys, band, force="extrap")
             #Observe with the band
             obs = ps.Observation(sp_norm, band)
             
@@ -652,6 +647,64 @@ class BBFit:
 
         return s.flux*fluxFactor
 
+
+    def _get_Qnu(self, a, lam, wavedusttype="silicate"):
+        '''
+        
+        '''
+        
+        from scipy import interpolate
+        
+        x = np.array([0.001, 0.01, 0.1, 1]) #size 
+        y = np.array([0.01, 0.06, 0.2, 7, 10 ]) #wavelength
+        
+        #--> size
+        # |      wave
+        # v
+        z = np.array([[0.02, 0.2, 0.85, 0.85],
+                          [0.02, 0.7, 0.7, 0.7],
+                          [0.001, 0.01, 0.7, 0.7],
+                          [0.00007, 0.001, 0.01, 0.1],
+                          [0.001, 0.01, 0.1, 1]])
+    
+        f = interpolate.interp2d(x, y, z, kind='linear')
+        
+        
+        return f(a, lam)
+        
+        
+    def _get_knu(self, a, wave, rho=1,  ):
+        '''
+        Returns the values for the dust mass absorption coefficient 
+        for the Spitzer bands for the given grain size and wavelength.
+                
+        k_nu = (3. / 4 * np.pi * rho * a**3)* (np.pi * a**2 * Q_nu(a))
+        
+        '''
+        
+        k_nu = (3. / 4 * np.pi * rho * a**3)* (np.pi * a**2 * self.Q_nu(a, wave))
+        
+        return k_nu
+
+    def _model_dust(self, Md, Td, a):
+
+        '''
+        
+        Using the dust modelling approach from Fox et. al. 2010.
+        The assumption is that the dust is optically thin and that there is only one size and 
+        one dust composition.
+        
+        The opactities are taken from their Figure 4 values.
+        
+        F_nu = M_d B_nu (T_d )k_nu(a) / d**2
+        '''
+        
+        Bnu = ps.BlackBody(Td)
+        Bnu.convert('fnu')
+        knu = self._get_knu(a, wave) * u.cm**2 / u.g
+
+        Fnu = Md * u.Msun * Bnu * knu / (self.distMpc * u.Mpc)**2
+        
                 
     #likelihood function
     def _like(self, p, xdat, ydat, errdat, debug=False):
@@ -718,8 +771,8 @@ class BBFit:
             if T1 < 0 or R1 < 0:
                 return -np.inf
     
-            logp = stats.uniform.logpdf(T1, 1000, 20000)
-            logp = logp + stats.uniform.logpdf(R1, 0,  100)
+            logp = stats.uniform.logpdf(T1, 10, 20000)
+            logp = logp + stats.uniform.logpdf(R1, 100,  70000)
         
         if self.model =="BlackBody_Av":
             
@@ -1094,9 +1147,12 @@ class BBFit:
             
             if plot:
                 plt.clf()
+                mask_lims = self.fluxerrs<0
                 plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
                 #plt.plot(lam, flux_end, label="Best fit LSQ")
-                plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
+                plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
+                plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.1, marker="o", color="b", uplims=True, lw=0)
+
                 plt.xlabel("Wavelength [A]")
                 plt.ylabel("$F_{\\lambda}$ [erg/s/cm2/A]")
                 plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
@@ -1423,7 +1479,7 @@ class BBFit:
         plt.figure(figsize=(8,6))
         plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, fmt="o")
         for i in range(len(self.wls)):
-                plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i].split(",")[-1], alpha=.4)
+                plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i], alpha=.4, fontsize=8)
         
         if self.model == "BlackBody":
             fluxbb = self._model(lam, (self.T, self.R))

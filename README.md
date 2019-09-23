@@ -84,13 +84,14 @@ pointing the name of the filter than you want to use and point to the file where
 Exmple:
 
 ```python
-import BBFit
+from model import BBFit
+import numpy as np
 
 #Create an instance of the class
 bb = BBFit.BBFit()
 
 #Set the filter names, magnitudes, errors and magnitude system (abmag or vegamag).
-bb.bands = np.array(["B", "V", "I", "g"])
+bb.bands = np.array(["B", "V", "I", "sdss,g"])
 bb.mags = np.array([10.0, 11.0, 12.0, 11.5])
 bb.magerrs = np.array([0.1, 0.1, 0.1, 0.05])
 bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "abmag"])

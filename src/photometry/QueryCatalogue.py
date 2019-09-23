@@ -140,7 +140,7 @@ class QueryCatalogue:
 
         return catalog
             
-    def query_catalogue(self, catalogue="PS1V3OBJECTS", filtered=True, tmpdir="/tmp"):
+    def query_catalogue(self, catalog_name="PS1V3OBJECTS", filtered=True, tmpdir="/tmp"):
         '''
         Sends a VO query to the PS1 catalogue.
         Filters the result by mangitude.
@@ -172,7 +172,7 @@ class QueryCatalogue:
         timestamp=datetime.datetime.isoformat(datetime.datetime.utcnow())
     
             
-        url = "http://gsss.stsci.edu/webservices/vo/CatalogSearch.aspx?CAT=%s&RA=%.5f&DEC=%.5f&SR=%.5f&MAGRANGE=%.3f,%.3f"%(catalogue, self.ra, self.dec, self.rad, self.minmag, self.maxmag)
+        url = "http://gsss.stsci.edu/webservices/vo/CatalogSearch.aspx?CAT=%s&RA=%.5f&DEC=%.5f&SR=%.5f&MAGRANGE=%.3f,%.3f"%(catalog_name, self.ra, self.dec, self.rad, self.minmag, self.maxmag)
         
         self.logger.info("URL queried: %s"%url)
         
@@ -190,7 +190,7 @@ class QueryCatalogue:
             except ValueError:
                 self.logger.warn("The search radius was too large for the service. Reducing to 0.25 deg.")
                 self.rad = 0.25
-                return self.query_catalogue(catalogue=catalogue, filtered=filtered, tmpdir=tmpdir)
+                return self.query_catalogue(catalog_name=catalog_name, filtered=filtered, tmpdir=tmpdir)
 
         '''if catalog.as_array() is None:
             #Clean temporary file.
@@ -205,7 +205,7 @@ class QueryCatalogue:
 
         #If it is PS1, we know what fields we want. 
         #Otherwise, we just return everything.
-        if (catalogue == "PS1V3OBJECTS"):
+        if (catalog_name == "PS1V3OBJECTS"):
             
             if (filtered):
                 #Filter spurious sources/ Objects where the majority of pixels where not masked (QFperfect >=0.9) and likely stars (rmeanpsfmag - rmeankronmag < 0.5)
@@ -230,8 +230,15 @@ class QueryCatalogue:
             newcat["Err_z"] = catalog["zMeanPSFMagErr"]
             newcat["Err_y"] = catalog["yMeanPSFMagErr"]  
             newcat["distance"] = catalog["distance"]  
+        elif (catalog_name=="2MASS" and filtered==True):
+            mask = np.array([('U' not in c.decode()) and ('F' not in c.decode()) and ('E' not in c.decode()) for c in catalog['ph_qual']])
+            mask2 = catalog['cc_flag']=='000'.encode()
+            newcat = catalog[mask*mask2]
+            self.logger.info("Prunned bad flags from 2MASS catalogue. Rows left: %d:"%len(newcat))
+            print ("Prunned bad flags from 2MASS catalogue. Rows left: %d:"%len(newcat))
         else:
             newcat = catalog
+            
             
         #Clean temporary file.\
         if (os.path.isfile(tmp_file)):

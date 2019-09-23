@@ -106,7 +106,7 @@ bb.nwalkers = 20
 bb.plotdir = "../../data/plots" 
 bb.resdir = "../../data/modelfits" 
 
-#Select from: "BlackBody", "BlackBody_Av", "BlackBody2_av", "PowerLaw", "PowerLaw_BlackBody", "Disk"
+#Select from: "BlackBody", "BlackBody_Av", "BlackBody2_Av", "PowerLaw", "PowerLaw_BlackBody", "Disk"
 bb.model = "BlackBody"
 
 
