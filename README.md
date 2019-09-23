@@ -11,7 +11,7 @@ There are 3 main packages.
 
 - [model](#model)
 - [phot](#phot)
-- [utils](#utils)
+- [utils](#utils-1)
 
 
 * **model**: offers the chance to fit black body emission spectrum to photometric datapoints. It converts the photometry into flux measurements. The MCMC code allows to bit: 1 black body, 1 black body + extinction, 2 black bodies, 2 black bodies + extinction, 1 power law + extinction.
