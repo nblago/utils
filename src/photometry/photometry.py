@@ -41,30 +41,36 @@ except ImportError:
     
 #Personal code inputs
 from photometry import QueryCatalogue
+from photometry import sextractor
 from utils import fitsutils
 
 
 class Photometry:
 
             
-    def __init__(self, logger=None):
+    def __init__(self):
 
         # Define our logger. Change the path to log the messages to a different location.
-        
+
+        #Root directory        
+        self._base_path = "."        
         #Directory where logs shall be stored
-        self._logpath = "data/log"
+        self._logpath = os.path.join(self._base_path, "data/log")
         #Directory where the photometry will be stored
-        self._photpath = "data/phot"
+        self._photpath = os.path.join(self._base_path, "data/phot")
         #Directory where the plots will be stored
-        self._plotpath = "data/plots"
+        self._plotpath = os.path.join(self._base_path, "data/plots")
         #Directory where temporary files will be stored
-        self._tmppath = "data/tmp"
-        
+        self._tmppath =  os.path.join(self._base_path, "data/tmp")
+                
         #Create the directories if they do not exist
         dirs = [self._logpath, self._photpath, self._plotpath, self._tmppath]
         for d in dirs:
             if not os.path.isdir(d):
                 os.makedirs(d)
+                
+        self.logger = None
+        self.initialize_logger()
                 
         # Create a dictionary to set up equivalent filter names between the observed system 
         # and the catalogues to be queried.
@@ -72,7 +78,8 @@ class Photometry:
             'raj2000':'ra', 'dej2000':'dec', 'RAJ2000':'ra', 'DEJ2000':'dec',\
             'u_psf':'u', 'g_psf':'g', 'r_psf':'r', 'i_psf':'i', 'z_psf':'z',\
             'e_u_psf':'du', 'e_g_psf':'dg', 'e_r_psf':'dr', 'e_i_psf':'di', 'e_z_psf':'dz',
-            'Vmag':'V',   'e_Vmag':'dV', 'Bmag':'B',   'e_Bmag':'dB', 
+            'Vmag':'V',   'e_Vmag':'dV', 'Bmag':'B',   'e_Bmag':'dB', \
+            'Rmag' : 'R', 'e_Rmag':'dR', 'Imag' : 'I', 'e_Imag':'dI',\
             'g_mag': 'g',  'e_g_mag':'dg', 'r_mag': 'r',  'e_r_mag':'dr', 'i_mag': 'i',  'e_i_mag':'di',
             'umag':'u', 'gma':'g', 'rmag':'r', 'imag':'i', \
             'raMean':'ra', 'decMean':'dec',\
@@ -82,7 +89,7 @@ class Photometry:
             'Err_g':'dg', 'Err_r':'dr', 'Err_i':'di', 'Err_z':'dz', 'Err_y':'dy',
             'gmag':'g', 'rmag':'r', 'imag':'i', 'zmag':'z', 'ymag':'y',\
              'e_gmag':'dg', 'e_rmag':'dr', 'e_imag':'di', 'e_zmag':'dz', 'e_ymag':'dy',
-             'j_m':'J',   'j_cmsig':'dJ', 'h_m':'H', 'h_cmsig':'dH', 'k_m':'K', 'k_cmsig':'dK', 'Ks':'K'}
+             'j_m':'J',   'j_cmsig':'dJ', 'h_m':'H', 'h_cmsig':'dH', 'k_m':'K', 'k_cmsig':'dK', 'Ks':'K', 'Ks + clear':'K'}
             
                         
         #Dictionary where we choose which other filter we require for zeropoint 
@@ -91,7 +98,7 @@ class Photometry:
             "U" : "B",
             "B" : "V",
             "V" : "B",
-            "R" : "I", 
+            "R" : "B", 
             "I" : "R",
             "Y" : "I",
             "u" : "r",
@@ -113,35 +120,13 @@ class Photometry:
         self.pixscale_keyword = 'PIXSCALE'
         self.rdnoise_keyword = 'RDNOISE'
         self.ext = 1
+        self.minmag = 14
+        self.maxmag = 20
+        self.survey = None
+        self.aperture = 1.5
         
-        self.initialize_logger()
+
         
-    def initialize_logger(self):
-        '''
-        Cretaes a new logger for the class to output the processing status.
-        '''
-        #Define the format of the logging
-        FORMAT = '%(asctime)-15s %(levelname)s [%(name)s] %(message)s'
-        now = datetime.datetime.utcnow()
-        timestamp = datetime.datetime.isoformat(now)
-        timestamp = timestamp.split("T")[0]
-        
-        try:
-            #Log into a file
-            logging.basicConfig(format=FORMAT, filename=os.path.join(self._logpath, "rcred_{0}.log".format(timestamp)), level=logging.INFO)
-            self.logger = logging.getLogger('zeropoint')
-            print ("Logger created as %s"%os.path.join(self._logpath, "rcred_{0}.log".format(timestamp)))
-        except:
-            logging.basicConfig(format=FORMAT, filename=os.path.join("/tmp", "rcred_{0}.log".format(timestamp)), level=logging.INFO)
-            self.logger= logging.getLogger("zeropoint")
-            print ("Logger created as %s"%os.path.join("/tmp", "rcred_{0}.log".format(timestamp)))
-            
-        #Add a handler to output the messages to STDOUT too
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(FORMAT)
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
 
 
     def _twoD_Gaussian(self, xdata_tuple, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
@@ -328,7 +313,7 @@ class Photometry:
             self.logger.info("File %s does not exist. Querying it."%cat_file)            
             if (np.any( np.array(['GSC23', 'GSC11', 'GSC12', 'USNOB', 'SDSS', 'FIRST', '2MASS', 'IRAS', 'GALEX', 'GAIA', 'TGAS', 'WISE', \
                    'CAOM_OBSCORE', 'CAOM_OBSPOINTING', 'PS1V3OBJECTS', 'PS1V3DETECTIONS'])==survey)):
-                catalog = qc.query_catalogue(catalogue=survey, filtered=True)                              
+                catalog = qc.query_catalogue(catalog_name=survey, filtered=True)                              
             #But it can be a SkyMapper as well (in the south).
             elif (survey == 'SKYMAPPER'):
                 catalog = qc.query_sky_mapper(filtered=True)
@@ -358,7 +343,10 @@ class Photometry:
         try:
             for n in catalog.colnames:
                 if n in self.filter_dic.keys():
-                    catalog.rename_column(n, self.filter_dic[n])
+                    new_name = self.filter_dic[n]
+                    if (new_name in catalog.colnames):
+                        catalog.remove_column(new_name)
+                    catalog.rename_column(n, new_name)
         except IOError:
             self.logger.error( "Problems with catalogue IO %s"% band)
             return False
@@ -368,9 +356,17 @@ class Photometry:
 
         print ("Renamed catalog", catalog[0])
         
-        #Make sure that the filter we want to calibrate and the color filter are not limits
-        mask = (~np.isnan(catalog['d'+band])) * (~np.isnan(catalog['d'+self.col_dic[band]]))
-        catalog = catalog[mask]
+        if 'd'+band in catalog.colnames:
+            #Make sure that the filter we want to calibrate and the color filter are not limits
+            mask = (~catalog[band].mask) * (~(catalog[self.col_dic[band]].mask)) * (~np.isnan(catalog['d'+band])) * (~np.isnan(catalog['d'+self.col_dic[band]]))
+            catalog = catalog[mask]
+        else:
+            col = Column(np.zeros(len(catalog)), name='d'+band)
+            catalog.add_column(col)
+            mask = (~catalog[band].mask) * (~(catalog[self.col_dic[band]].mask))
+            catalog = catalog[mask]
+            
+            
         
         # Determine the X and Y of all the stars in the query.
         catcoords = astropy.coordinates.SkyCoord( catalog['ra'], catalog['dec'], unit=u.deg)
@@ -391,7 +387,7 @@ class Photometry:
         mask2 = (separations >  10 * u.arcsec)
      
         #Select the right magnitude range
-        mask3 = (catalog[band]>minmag)*(catalog[band]<maxmag)
+        mask3 = (catalog[band].data.data > minmag)*(catalog[band].data.data < maxmag)
     
         #Combine all masks
         mask = mask1 * mask2 * mask3
@@ -518,6 +514,35 @@ class Photometry:
             
         return bmjd                                           
 
+    def initialize_logger(self):
+        '''
+        Cretaes a new logger for the class to output the processing status.
+        '''
+        #Define the format of the logging
+        FORMAT = '%(asctime)-15s %(levelname)s [%(name)s] %(message)s'
+        now = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.isoformat(now)
+        timestamp = timestamp.split("T")[0]
+        
+        if self.logger is None:
+            try:
+                #Log into a file
+                logging.basicConfig(format=FORMAT, filename=os.path.join(self._logpath, "rcred_{0}.log".format(timestamp)), level=logging.INFO)
+                self.logger = logging.getLogger('zeropoint')
+                print ("Logger created as %s"%os.path.join(self._logpath, "rcred_{0}.log".format(timestamp)))
+            except:
+                logging.basicConfig(format=FORMAT, filename=os.path.join("/tmp", "rcred_{0}.log".format(timestamp)), level=logging.INFO)
+                self.logger= logging.getLogger("zeropoint")
+                print ("Logger created as %s"%os.path.join("/tmp", "rcred_{0}.log".format(timestamp)))
+                
+            #Add a handler to output the messages to STDOUT too
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setLevel(logging.DEBUG)
+            formatter = logging.Formatter(FORMAT)
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+
+        
     def app_phot(self, imagefile, ras, decs, fwhm, plot=False, save=False):
         '''
         Computes the aperture photometry on the image, for the coordinates given.
@@ -568,9 +593,9 @@ class Photometry:
         bmjd = self._compute_bmjd(imagefile, ras, decs)
         
         zp = fitsutils.get_par(imagefile, 'ZP', self.ext)
+        zperr = fitsutils.get_par(imagefile, 'ZPERR', self.ext)
         color = fitsutils.get_par(imagefile, 'COLOR', self.ext)
         kcoef = fitsutils.get_par(imagefile, 'KCOEF', self.ext)
-        zperr = fitsutils.get_par(imagefile, 'ZPERR', self.ext)
         if zp is None:
             zp = 0
         if zperr is None:
@@ -581,9 +606,10 @@ class Photometry:
         positions = SkyCoord(ras*u.deg, decs*u.deg, frame='icrs')
                         
         # Set aperture radius to three times the fwhm radius
-        aperture_rad = np.median(fwhm)*1.5* u.arcsec    
+        aperture_rad = np.median(fwhm)*self.aperture* u.arcsec    
         aperture = SkyCircularAperture(positions, r=aperture_rad)
         
+        print ("APERTURE RAD", aperture_rad)
         annulus_apertures = SkyCircularAnnulus(positions, r_in=aperture_rad*2.5, r_out=aperture_rad*4)
     
         #Convert to pixels
@@ -596,29 +622,53 @@ class Photometry:
         
         try:
             if np.ndim(ras) == 0:
-                c = wcs.wcs_world2pix(np.array([[ras, decs]]), 0)                
+                c = wcs.wcs_world2pix(np.array([[ras, decs]]), 1)                
             else:
-                c = wcs.wcs_world2pix(np.array([ras, decs]).T, 0)
+                c = wcs.wcs_world2pix(np.array([ras, decs]).T, 1)
         except ValueError:
             self.logger.error('The vectors of RAs, DECs could not be converted into pixels using the WCS!')
             self.logger.error(str(np.array([ras, decs]).T))
     
         if plot:
+            
+            dataT = data.T
             x = c[:,0]
             y = c[:,1]
             
+            X, Y = dataT.shape
+            
+            
+            x0 = np.maximum(1, int(x[0])-100)
+            x1 = np.minimum(X, int(x[0])+100)
+            y0 = np.maximum(1, int(y[0])-100)
+            y1 = np.minimum(Y, int(y[0])+100)
+            
+            self.logger.info("Plotting aperture photometry for target in pixels %s. Data shape %d x %d. Positions %d, %d, %d, %d"%(c,X,Y, x0, x1, y0, y1))
+
             plt.figure(figsize=(10,10))
-            data_cut = data[int(x[0])-100: int(x[0])+100, int(y[0])-100: int(y[0])+100]
-            norm = simple_norm(data_cut, 'sqrt', percent=99)
-            plt.imshow(data, norm=norm)
-            pix_aperture.plot(color='white', lw=2)
-            pix_annulus.plot(color='red', lw=2)
-            plt.xlim(int(x[0])-100, int(x[0])+100)
-            plt.ylim(int(y[0])-100, int(y[0])+100)
-            plt.title('Apertures for filter %s'%filt)
-            plt.savefig(os.path.join(self._plotpath, "apertures_cutout_%s.png"%os.path.basename(imagefile)))
-            plt.clf()
-        
+            data_cut = dataT[x0: x1, y0: y1]
+            data_cut[np.isnan(data_cut)] = np.nanmin(data_cut)
+            nx, ny = data_cut.shape
+            if nx > 1 and ny > 1:
+                self.logger.info("Plotting a cutout of %d x %d pixels."%data_cut.shape)
+                norm = simple_norm(data_cut, 'sqrt', percent=98)
+                plt.imshow(data, norm=norm, origin="lower")
+                pix_aperture.plot(color='white', lw=2)
+                pix_annulus.plot(color='red', lw=2)
+                plt.xlim(x0, x1)
+                plt.ylim(y0, y1)
+                plt.title('Apertures for filter %s'%filt)
+                plt.savefig(os.path.join(self._plotpath, "apertures_cutout_%s.png"%os.path.basename(imagefile)))
+                plt.clf()
+            else:
+                self.logger.error("Not enough pixels within the object area. Object in pixel %d %d outside of the field!"%(x[0], y[0]))
+                norm = simple_norm(data, 'sqrt', percent=99)
+                plt.imshow(data, norm=norm, origin="lower")
+                pix_aperture.plot(color='white', lw=2)
+                pix_annulus.plot(color='red', lw=2)
+                plt.title('Apertures for filter %s'%filt)
+                plt.savefig(os.path.join(self._plotpath, "apertures_cutout_targetout_%s.png"%os.path.basename(imagefile)))
+                plt.clf()
         #Divide each pixel in 5 subpixels to make apertures
         apers = [pix_aperture, pix_annulus]
         phot_table = aperture_photometry(data, apers, method='subpixel', subpixels=5)
@@ -670,6 +720,8 @@ class Photometry:
         for col in phot.colnames:
             phot[col].info.format = '%.8g'  # for consistent table output
         
+        self.logger.info(phot[0])
+            
         if save:
             appfile = os.path.join(self._photpath, fitsutils.get_par(imagefile, "OBJECT", self.ext)+".app.phot.txt")
             self.logger.info('Creating aperture photometry out file as %s'%appfile)
@@ -682,6 +734,9 @@ class Photometry:
             with open(appfile, 'a') as f:
                 self.logger.info('Adding aperture photometry to file %s'%appfile)
 
+                print ((os.path.basename(imagefile), mjd, bmjd, self.filter_dic.get(filt, filt), phot['inst_mag'].data[0], \
+                    zp, zperr, color, kcoef, phot['inst_mag'].data[0]+ zp, phot['err_mag'].data[0], np.sqrt(zperr**2 + phot['err_mag'].data[0]**2)))
+                
                 f.write("%s %.8f %.8f %s %.4f %.4f %.4f %s %.4f %.4f %.4f %.4f\n"%(os.path.basename(imagefile), mjd, bmjd, self.filter_dic.get(filt, filt), phot['inst_mag'].data[0], \
                     zp, zperr, color, kcoef, phot['inst_mag'].data[0]+ zp, phot['err_mag'].data[0], np.sqrt(zperr**2 + phot['err_mag'].data[0]**2)))
 
@@ -691,7 +746,7 @@ class Photometry:
         
     
     
-    def get_zeropoint(self, imgfile, survey, filt, col_filt=None, minmag=11., maxmag=17, plot=False):
+    def get_zeropoint(self, imgfile, survey, filt, col_filt=None, minmag=10., maxmag=17, plot=False):
         '''
         Function that fits the zeropoint for the image through 
         fitting a polynomial to instrumental magnitudes
@@ -848,7 +903,7 @@ class Photometry:
 
       
              
-    def measure_mag(self, imgfile, ra=None, dec=None, unify_headers=False):
+    def measure_mag(self, imgfile, ra=None, dec=None, unify_headers=False, zp=None):
         '''
         Shows how to use the code to: 
         
@@ -865,8 +920,6 @@ class Photometry:
         dec : float
             Right ascention of the object the aperture magnitude will be computed for.   
             If the value is none, the coordinates will be extracted from the header keyword 'DEC'
-        ext : int
-            Extension in the imgfile where the data is stored.   
         unify_headers : bool
             Boolean to say if we want to add to the header the unified names
             for the standard parameters. It will overwrite the old header with extra values. 
@@ -877,21 +930,57 @@ class Photometry:
         # 'GSC23', 'GSC11', 'GSC12', 'USNOB', 'SDSS', 'FIRST', '2MASS', 'IRAS', 'GALEX', 'GAIA', 'TGAS', 'WISE', \
         #'CAOM_OBSCORE', 'CAOM_OBSPOINTING', 'PS1V3OBJECTS', 'PS1V3DETECTIONS','SKYMAPPER'
         
-        survey_dic = {
-        "u" : "SDSS",
-        "g" : "PS1V3OBJECTS",
-        "r" : "PS1V3OBJECTS",
-        "i" : "PS1V3OBJECTS",
-        "z" : "PS1V3OBJECTS",
-        "y" : "PS1V3OBJECTS",
-        "J" : "2MASS",
-        "H" : "2MASS",
-        "K" : "2MASS"
-        }
+        if dec > -30:
+            survey_dic = {
+            "u" : "SDSS",
+            "g" : "PS1V3OBJECTS",
+            "r" : "PS1V3OBJECTS",
+            "i" : "PS1V3OBJECTS",
+            "z" : "PS1V3OBJECTS",
+            "y" : "PS1V3OBJECTS",
+            "Y" : "PS1V3OBJECTS",
+            "J" : "2MASS",
+            "H" : "2MASS",
+            "K" : "2MASS",
+            "U" : "APASS",
+            "B" : "UCAC4",
+            "V" : "UCAC4",
+            "R" : "UCAC4",
+            "I" : "APASS"
+            }
+        else:
+            survey_dic = {
+            "g" : "SKYMAPPER",
+            "r" : "SKYMAPPER",
+            "i" : "SKYMAPPER",
+            "z" : "SKYMAPPER",
+            "y" : "SKYMAPPER",
+            "Y" : "SKYMAPPER",
+            "J" : "2MASS",
+            "H" : "2MASS",
+            "K" : "2MASS",
+            "U" : "APASS",
+            "B" : "UCAC4",
+            "V" : "UCAC4",
+            "R" : "UCAC4",
+            "I" : "APASS"
+            }
+            
         
         f = fits.open(imgfile)
-        if (len(f)-1 < self.ext):
-            self.logger.error("The fits files that you want to process has less extensions that you indicated.")
+        
+        ext = 0
+        while ext < len(f):
+            if not 'TELESCOP' in f[ext].header:
+                ext = ext + 1
+
+            else:
+                self.ext = ext
+                self.logger.info("Found the data to be in extension %d"%ext)
+                break
+                
+        if (ext == len(f)):
+            self.logger.error("I searched through all the extensions in this files and could not find the one containing the TELESCOP keyword!")
             return
             
         #First Unify header words, which may be different fordifferent telescopes
@@ -900,8 +989,9 @@ class Photometry:
             hdr = f[self.ext].header
             data = f[self.ext].data
             new_hdr = fitsutils.unify_header(hdr)
+            f[self.ext].header = new_hdr
             new_imgfile = os.path.join(os.path.dirname(imgfile), "unified_"+os.path.basename(imgfile))
-            fits.writeto(new_imgfile, data, header=new_hdr, overwrite=True)
+            f.writeto(new_imgfile, overwrite=True)
             self.logger.info("Wrote unified header into image %s"%new_imgfile)
             imgfile = new_imgfile
 
@@ -909,31 +999,55 @@ class Photometry:
         #Extract the filter from extension 1
         filt_original = fitsutils.get_par(imgfile, "FILTER", self.ext)
         filt = self.filter_dic.get(filt_original, filt_original)
-        print ("Original FILTER", filt_original, "New filter", filt)
+        print ("Original FILTER: ", filt_original, ". New filter:", filt)
         if filt is None:
             print ("Could not find the keyword FILTER in the header in extension %d."%self.ext)
             print ("Please check that the extension you setected has data.")
             
     
-        #Check which survey we should query provided the filter the data was taken.    
-        if filt in survey_dic.keys():
+        #Check which survey we should query provided the filter the data was taken. 
+        if not self.survey is None:
+            survey = self.survey
+        elif filt in survey_dic.keys():
             survey = survey_dic[filt]
         else:
             print ("A survey name is required to calibrate your image against.")
             return
     
-        
-        #Compute the zeropoint
-        #For that here we select stars between 15 and 19.5 mag.
-        zp, zp_err, colorterm = self.get_zeropoint(imgfile, survey=survey, filt=filt, \
-            col_filt=self.col_dic[filt], minmag=15, maxmag=19.5, plot=True)
-    
-        if zp == 0:
-            self.logger.error("There were not enough stars to compute a reliable zeropoint for image %s. Skipping..."%imgfile)
-            return
+        if zp is None:
+            try:
+                #Compute the zeropoint
+                #For that here we select stars between 15 and 19.5 mag.
+                zp, zp_err, colorterm = self.get_zeropoint(imgfile, survey=survey, filt=filt, \
+                    col_filt=self.col_dic[filt], minmag=self.minmag, maxmag=self.maxmag, plot=True)
+            
+                if zp == 0:
+                    self.logger.error("There were not enough stars to compute a reliable zeropoint for image %s. Setting zeropoint to 0!"%imgfile)
+                    fitsutils.update_par(imgfile, "ZP", 0, self.ext)
+                    fitsutils.update_par(imgfile, "ZPERR", 0, self.ext)
+                    fitsutils.update_par(imgfile, "COLOR", 0, self.ext)
+                    fitsutils.update_par(imgfile, "KCOEF", 0, self.ext)
+            except SystemExit:
+                self.logger.error("Zeropoint could not be computed. Will set it to zero instead and compute instrumental mags only.")
+                fitsutils.update_par(imgfile, "ZP", 0, self.ext)
+                fitsutils.update_par(imgfile, "ZPERR", 0, self.ext)
+                fitsutils.update_par(imgfile, "COLOR", 0, self.ext)
+                fitsutils.update_par(imgfile, "KCOEF", 0, self.ext)
+        elif zp == 0:
+            self.logger.warn("You have selected zp=0! No further calibrations will be attempted!")
+            fitsutils.update_par(imgfile, "ZP", 0, self.ext)
+            fitsutils.update_par(imgfile, "ZPERR", 0, self.ext)
+            fitsutils.update_par(imgfile, "COLOR", 0, self.ext)
+            fitsutils.update_par(imgfile, "KCOEF", 0, self.ext)     
+
+            
         #Now get the positions of the transient and run aperture photometry on it
         # with the FWHM computed in the previous step.
         fwhm = fitsutils.get_par(imgfile, "FWHM", self.ext)
+        if fwhm is None or fwhm ==0:
+            ang2pix = fitsutils.get_par(imgfile, self.pixscale_keyword, self.ext) 
+            nsources, fwhm, ellipticity, bkg = sextractor.get_image_pars(imgfile, arcsecpix=ang2pix)
+            print ("And2pix: ", ang2pix, "fwhm", fwhm)
     
         if ra is None or dec is None:    
             ra = fitsutils.get_par(imgfile, "RA", self.ext)
@@ -949,16 +1063,15 @@ class Photometry:
             
             
         #Run aperture photometry on the positions of the stars.
-        
         phot = self.app_phot(imgfile, coords.ra.deg, coords.dec.deg, fwhm=fwhm, save=True, plot=True)
-        self.logger.info("App photometry for object: %.4f+/-%.4f"%( phot['inst_mag'].data[0]+ zp, phot['err_mag'].data[0]))
+        print (phot['inst_mag'].data[0], zp, phot['err_mag'].data[0])
+        self.logger.info("RA: %.6f DEC: %.6f. App photometry for object: %.4f+/-%.4f"%( coords.ra.deg, coords.dec.deg, phot['inst_mag'].data[0]+ zp, phot['err_mag'].data[0]))
 
 
 
 def usage_case(f, ra, dec):
     
     phot = Photometry()
-    phot.ext = 1
     
     try:
         phot.measure_mag(f, ra=ra, dec=dec, unify_headers=False)

@@ -325,8 +325,21 @@ def unify_header(prihdr):
             dic["FILTER"] = prihdr["FILTER"]
             dic["MJD-OBS"] = prihdr["MJD"]
             dic["RDNOISE"] = prihdr["EFFRN"]
-            
-                
+    elif telescope == "Keck II":
+        if (prihdr["CURRINST"]=="NIRC2"):
+            dic["GAIN"] = prihdr["GAIN"]
+            dic["EXPTIME"] = prihdr["ITIME"] * prihdr["COADDS"]
+            dic["AIRMASS"] = prihdr["AIRMASS"]
+            dic["FILTER"] = prihdr["FILTER"]
+            dic["MJD-OBS"] = prihdr["MJD-OBS"]
+            dic["RDNOISE"] = prihdr["RDNOISE"]            
+    elif telescope == "1m0-09":
+        dic["GAIN"] = prihdr["GAIN"]
+        dic["EXPTIME"] = prihdr["EXPTIME"]
+        dic["AIRMASS"] = prihdr["AIRMASS"]
+        dic["FILTER"] = prihdr["FILTER"]
+        dic["MJD-OBS"] = prihdr["MJD-OBS"]
+        dic["RDNOISE"] = prihdr["RDNOISE"]                      
     else:
         print ("Telescope unknown!") 
     
@@ -347,7 +360,7 @@ def unify_fits(myfits, overwrite=False, field=-1):
     datafields = 0
     
     for n in range(nfields):
-        if (hdulist[n].data != None):
+        if (not hdulist[n].data is None):
             datafields +=1
             
     if nfields > 1:
