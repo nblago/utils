@@ -9,9 +9,9 @@ Util python scripts for data reduction, MCMC modeling and fits utilities.
 
 There are 3 main packages.
 
-- [model]()
-- [phot]()
-- [utils]()
+- [model](#model)
+- [phot](#phot)
+- [utils](#utils)
 
 
 * **model**: offers the chance to fit black body emission spectrum to photometric datapoints. It converts the photometry into flux measurements. The MCMC code allows to bit: 1 black body, 1 black body + extinction, 2 black bodies, 2 black bodies + extinction, 1 power law + extinction.
@@ -95,11 +95,13 @@ bb.mags = np.array([10.0, 11.0, 12.0, 11.5])
 bb.magerrs = np.array([0.1, 0.1, 0.1, 0.05])
 bb.photsys = np.array(["vegamag", "vegamag", "vegamag", "abmag"])
 
-#Add additional parameters, such as redshift or distance (in Mpc), and the extinction to be corrected for the magnitudes (assuming Rv=3.1).
+#Add additional parameters, such as redshift or distance (in Mpc), and the extinction to be 
+#corrected for the magnitudes (assuming Rv=3.1).
 bb.distMpc = 5.1
 bb.av_mw = 0.3
 
-#Next, invoke the routine to transform the fluxes. If you select the plotting, an SED will be generated showing the fluxes and wavelengths for each magnitude.
+#Next, invoke the routine to transform the fluxes. If you select the plotting, an SED will 
+#be generated showing the fluxes and wavelengths for each magnitude.
 bb.initialize(plot=True)
 
 #Finally, collect the average wavelengths of your filters, the extinction corrected fluxes and errors from the class:
@@ -119,4 +121,6 @@ For fitting, the file `test_BBFit.py` shows several examples on how to use the M
 Queries PS1 survey (in the North) and SkyMapper (in the south), to obtain the positions of offset stars and provide the background image to locate the transient position.
 
 
+### Phot
 
+Performs aperture photometry on LCO (and few other) telescopes.
