@@ -13,10 +13,12 @@ import numpy as np
 
 
 SEXCONFIG = os.path.abspath(os.path.join('../config/daofind.sex'))
+
 if os.path.isfile(SEXCONFIG):
     print ('Found sextractor configuration file: %s'%SEXCONFIG)
 else:
     print ('Please, put the sextractor configuration file daofind.sex in: %s'%(os.path.dirname(SEXCONFIG)))
+    print ('Otherwise, redefine the environmental variable SEXCONFIG to point to the location where daofind.sex is located.')
 
     
 def run_sex(flist, overwrite=False):

@@ -175,13 +175,15 @@ class QueryCatalogue:
         url = "http://gsss.stsci.edu/webservices/vo/CatalogSearch.aspx?CAT=%s&RA=%.5f&DEC=%.5f&SR=%.5f&MAGRANGE=%.3f,%.3f"%(catalog_name, self.ra, self.dec, self.rad, self.minmag, self.maxmag)
         
         self.logger.info("URL queried: %s"%url)
+        tmp_file = os.path.join(tmpdir, 'ps1_cat_%.3f_%.3f_%.3f_%.2f_%.2f.xml'%(self.ra, self.dec, self.rad, self.minmag, self.maxmag) ) 
         
-        tmp_file = os.path.join(tmpdir, 'ps1_cat_%s.xml'%timestamp)
-        
-        with open(tmp_file, "wb") as f:
-            page = urlopen(url)            
-            f.write(page.read())
-        
+        #If the file was not downloaded to the temporary file, we download it. Otherwise, we skip this step.
+        if not os.path.isfile(tmp_file): 
+            with open(tmp_file, "wb") as f:
+                page = urlopen(url)            
+                f.write(page.read())
+                self.logger.info("Saved query as file: %s"%tmp_file)
+		
         # Read RA, Dec and magnitude from XML format USNO catalog
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -190,6 +192,7 @@ class QueryCatalogue:
             except ValueError:
                 self.logger.warn("The search radius was too large for the service. Reducing to 0.25 deg.")
                 self.rad = 0.25
+                os.remove(tmp_file)
                 return self.query_catalogue(catalog_name=catalog_name, filtered=filtered, tmpdir=tmpdir)
 
         '''if catalog.as_array() is None:
@@ -200,7 +203,7 @@ class QueryCatalogue:
 
         self.logger.info("First row catalogue: %s:"%catalog[0])
 
-        catalog = catalog.as_array().data
+        #catalog = catalog.as_array().data
 
 
         #If it is PS1, we know what fields we want. 
@@ -241,8 +244,8 @@ class QueryCatalogue:
             
             
         #Clean temporary file.\
-        if (os.path.isfile(tmp_file)):
-            os.remove(tmp_file)
+        #if (os.path.isfile(tmp_file)):
+        #    os.remove(tmp_file)
         
         return newcat
     
