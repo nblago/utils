@@ -5,6 +5,7 @@ Created on Thu Feb 22 10:57:34 2018
 Class that enables to fit a black body function to a set of magntidues.
 
 @author: nadiablago
+@version: 0.22
 """
 
 from __future__ import print_function
@@ -20,10 +21,15 @@ import emcee
 from scipy import stats
 import extinction
 from astropy.cosmology import FlatLambdaCDM
-from scipy.optimize import curve_fit
 import warnings
 
 
+#If PYSYN_CDBS is not defined, it adds the environment variable which points to the 
+#filter response files for the bands we are interested in.
+if not 'PYSYN_CDBS' in os.environ.keys():
+    print ("Adding the Pysynphot environment:")
+    os.environ['PYSYN_CDBS'] = "/Users/USER/SOMEWHERE/pysynphot_files"
+print ('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
 
 import pysynphot as ps
         
@@ -31,7 +37,8 @@ class BBFit:
     
     def __init__(self):
         '''
-        Constructor initializes all the parameters to defaults.os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
+        Constructor initializes all the parameters to 
+        defaults.
         '''
         
         #Some predefined constants in the units we need them
@@ -734,10 +741,11 @@ class BBFit:
         #Discard models which exceed the upper limits
         if (np.any(ymod[errdat<0] > ydat[errdat<0])):
             prob = 1e-320
+        #Compute the likelihood with only valid datapoints.
         else:
-            prob = stats.norm.pdf(ydat, ymod, errdat) 
+            prob = stats.norm.pdf(ydat[errdat>0] , ymod[errdat>0] , errdat[errdat>0] ) 
     
-        # log probcilities
+        # log probabilities
         # we add tiny number to avoid NaNs
         mylike = np.log(prob + 1e-320).sum() 
     
@@ -771,8 +779,8 @@ class BBFit:
             if T1 < 0 or R1 < 0:
                 return -np.inf
     
-            logp = stats.uniform.logpdf(T1, 10, 20000)
-            logp = logp + stats.uniform.logpdf(R1, 100,  70000)
+            logp = stats.uniform.logpdf(T1, 10, 10000)
+            logp = logp + stats.uniform.logpdf(R1, 1,  1000)
         
         if self.model =="BlackBody_Av":
             
@@ -793,13 +801,13 @@ class BBFit:
             T2 = p[2]
             R2 = p[3]
 
-            if T1 < 0 or T2 > T1 or T2 < 0:
+            if T1 < 0 or T2 > T1 or T2 < 0 or R1 < 0 or R2<0:
                 return - np.inf
             else:
-                logp = stats.uniform.logpdf(T1, 1000, 60000)
-                logp = logp + stats.uniform.logpdf(R1, 0,  70000)
-                logp = logp + stats.uniform.logpdf(T2, 100, 5000)
-                logp = logp + stats.uniform.logpdf(R2, 0, 5000000)
+                logp = stats.uniform.logpdf(T1, 100, 10000)
+                logp = logp + stats.uniform.logpdf(R1, 0,  10000)
+                logp = logp + stats.uniform.logpdf(T2, 100, 10000)
+                logp = logp + stats.uniform.logpdf(R2, 0, 10000)
 
         elif self.model == "BlackBody2_Av":
             T1 = p[0] 
@@ -1151,12 +1159,13 @@ class BBFit:
                 plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
                 #plt.plot(lam, flux_end, label="Best fit LSQ")
                 plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
-                plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.1, marker="o", color="b", uplims=True, lw=0)
+                plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
 
                 plt.xlabel("Wavelength [A]")
                 plt.ylabel("$F_{\\lambda}$ [erg/s/cm2/A]")
                 plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
                 plt.legend()
+                plt.yscale("log")
                 name = self._get_save_path(None, "fluxes_obs_bb")
                 plt.savefig(name, dpi=200)
                 
@@ -1373,13 +1382,13 @@ class BBFit:
         
         if self.model == "BlackBody":
             p0 = np.array([ self.initT1, self.initR1])
-            sigs = np.array([2000, 10])
+            sigs = np.array([self.initT1*0.2, self.initR1*0.2])
         elif self.model == "BlackBody_Av":
             p0 = np.array([ self.initT1, self.initR1, self.av_host])
             sigs = np.array([2000, 10, 0.5]) 
         elif self.model == "BlackBody2":
             p0 = np.array([ self.initT1, self.initR1, self.initT2, self.initR2])
-            sigs = np.array([2000, 5, 2000, 5]) 
+            sigs = np.array([self.initT1*0.2, self.initR1*0.2, self.initT2*0.2, self.initR2*0.2]) 
         elif self.model == "BlackBody2_Av":
             p0 = np.array([ self.initT1, self.initR1, self.av_host, self.initT2, self.initR2])
             sigs = np.array([2000, 5, 1,  2000, 5])   
@@ -1477,7 +1486,11 @@ class BBFit:
         
         plt.clf()
         plt.figure(figsize=(8,6))
-        plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, fmt="o")
+        mask_lims = self.fluxerrs<0
+        plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
+        plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
+   
+     
         for i in range(len(self.wls)):
                 plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i], alpha=.4, fontsize=8)
         
