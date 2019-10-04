@@ -2,6 +2,7 @@
 # coding: utf-8
 
 # # Photometry
+# @author: Nadia Blagorodnova
 
 # From astropy and [Photutils](http://photutils.readthedocs.io/en/stable/).
 
@@ -87,6 +88,7 @@ class Photometry:
             'gMeanPSFMag':'g', 'gMeanPSFMagErr':'dg', 'rMeanPSFMag':'r', 'rMeanPSFMagErr':'dr',
             'iMeanPSFMag':'i', 'iMeanPSFMagErr':'di', 'zMeanPSFMag':'z', 'zMeanPSFMagErr':'dz',
             'yMeanPSFMag':'y', 'yMeanPSFMagErr':'dy',\
+            'Y':'y', 'dY':'dy',\
             'Err_g':'dg', 'Err_r':'dr', 'Err_i':'di', 'Err_z':'dz', 'Err_y':'dy',
             'gmag':'g', 'rmag':'r', 'imag':'i', 'zmag':'z', 'ymag':'y',\
              'e_gmag':'dg', 'e_rmag':'dr', 'e_imag':'di', 'e_zmag':'dz', 'e_ymag':'dy',
@@ -293,12 +295,12 @@ class Photometry:
         ra0, dec0 = wcs.wcs_pix2world(np.array([img.shape[0], img.shape[1]], ndmin=2), 1)[0]
     
         #Calculate the size of the field --> search radius  . As maximum, it needs to be 0.25 deg.
-        sr = 2.1*np.abs(dec-dec0)
-        sr = np.minimum(sr, 0.5)
-        self.logger.info("Field center: (%.4f %.4f) and FoV: %.4f  [arcmin] "%( ra, dec, sr*60))
+        sr_ori = 2.1*np.abs(dec-dec0)
+        sr = np.minimum(sr_ori, 0.25)
+        self.logger.info("Field center: (%.4f %.4f) and FoV: %.4f  [arcmin] "%( ra, dec, sr_ori*60))
         
         #Creates the Query class
-        qc = QueryCatalogue.QueryCatalogue(ra, dec, sr/1.8, minmag, maxmag, self.logger)
+        qc = QueryCatalogue.QueryCatalogue(ra, dec, sr, minmag, maxmag, self.logger)
 
         
         cat_file = os.path.join(self._tmppath, 'query_result_%s_%.3f_%.3f_%.3f_%.2f_%.2f.txt'%(survey.split("/")[-1], ra, dec, sr, minmag, maxmag) )   
@@ -359,7 +361,10 @@ class Photometry:
         
         if 'd'+band in catalog.colnames:
             #Make sure that the filter we want to calibrate and the color filter are not limits
-            mask = (~catalog[band].mask) * (~(catalog[self.col_dic[band]].mask)) * (~np.isnan(catalog['d'+band])) * (~np.isnan(catalog['d'+self.col_dic[band]]))
+            try:
+                mask = (~catalog[band].mask) * (~(catalog[self.col_dic[band]].mask)) * (~np.isnan(catalog['d'+band])) * (~np.isnan(catalog['d'+self.col_dic[band]]))
+            except AttributeError:
+                mask = (~np.isnan(catalog['d'+band])) * (~np.isnan(catalog['d'+self.col_dic[band]]))
             catalog = catalog[mask]
         else:
             col = Column(np.zeros(len(catalog)), name='d'+band)
@@ -367,8 +372,9 @@ class Photometry:
             mask = (~catalog[band].mask) * (~(catalog[self.col_dic[band]].mask))
             catalog = catalog[mask]
             
-            
-        
+        #Make sure we convert it into a table
+        #catalog = catalog.to_table()
+
         # Determine the X and Y of all the stars in the query.
         catcoords = astropy.coordinates.SkyCoord( catalog['ra'], catalog['dec'], unit=u.deg)
     
@@ -388,8 +394,11 @@ class Photometry:
         mask2 = (separations >  10 * u.arcsec)
      
         #Select the right magnitude range
-        mask3 = (catalog[band].data.data > minmag)*(catalog[band].data.data < maxmag)
-    
+        if catalog['ra'].dtype == 'float':
+            mask3 = (catalog[band] > minmag)*(catalog[band] < maxmag)
+        else:
+            mask3 = (catalog[band].data.data > minmag)*(catalog[band].data.data < maxmag)
+
         #Combine all masks
         mask = mask1 * mask2 * mask3
         
@@ -1073,7 +1082,8 @@ class Photometry:
 def usage_case(f, ra, dec):
     
     phot = Photometry()
-    
+    phot.minmag = 15
+    phot.maxmag = 19
     try:
         phot.measure_mag(f, ra=ra, dec=dec, unify_headers=False)
     except TypeError:
