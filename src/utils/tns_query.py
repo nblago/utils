@@ -43,7 +43,7 @@ def get_tns_date2date(date1, date2):
     
     '''
     
-    url = "https://wis-tns.weizmann.ac.il/search?&date_start%5Bdate%5D={0}&date_end%5Bdate%5D={1}&format=csv&num_page=1000".format(date1, date2)
+    url = "https://wis-tns.weizmann.ac.il/search?&date_start%5Bdate%5D={0}&date_end%5Bdate%5D={1}&format=csv&num_page=500".format(date1, date2)
     cont_url = urlopen(url)
     cont = cont_url.read() 
     

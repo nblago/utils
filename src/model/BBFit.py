@@ -775,8 +775,8 @@ class BBFit:
             if T1 < 0 or R1 < 0:
                 return -np.inf
     
-            logp = stats.uniform.logpdf(T1, 10, 10000)
-            logp = logp + stats.uniform.logpdf(R1, 1,  1000)
+            logp = stats.uniform.logpdf(T1, 10, 1000)
+            logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
         
         if self.model =="BlackBody_Av":
             
@@ -787,8 +787,8 @@ class BBFit:
             if T1 < 0 or R1 < 0 or av < 0:
                 return -np.inf
             else:
-                logp = stats.uniform.logpdf(T1, 1000, 20000)
-                logp = logp + stats.uniform.logpdf(R1, 0,  100)
+                logp = stats.uniform.logpdf(T1, 10, 1000)
+                logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
                 logp = logp + stats.uniform.logpdf(av, 0,  3)
 
         elif self.model == "BlackBody2":
@@ -800,10 +800,10 @@ class BBFit:
             if T1 < 0 or T2 > T1 or T2 < 0 or R1 < 0 or R2<0:
                 return - np.inf
             else:
-                logp = stats.uniform.logpdf(T1, 100, 10000)
-                logp = logp + stats.uniform.logpdf(R1, 0,  10000)
-                logp = logp + stats.uniform.logpdf(T2, 100, 10000)
-                logp = logp + stats.uniform.logpdf(R2, 0, 10000)
+                logp = stats.uniform.logpdf(T1, 100, 1000)
+                logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
+                logp = logp + stats.uniform.logpdf(T2, 100, 1000)
+                logp = logp + stats.uniform.logpdf(R2, 10000, 120000)
 
         elif self.model == "BlackBody2_Av":
             T1 = p[0] 
@@ -816,11 +816,11 @@ class BBFit:
                 return - np.inf
 
             else:
-                logp = stats.uniform.logpdf(T1, 1000, 20000)
-                logp = logp + stats.uniform.logpdf(R1, 0,  100)
+                logp = stats.uniform.logpdf(T1, 100, 1000)
+                logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
                 logp = logp + stats.uniform.logpdf(av, 0, 3)
-                logp = logp + stats.uniform.logpdf(T2, 500, 20000)
-                logp = logp + stats.uniform.logpdf(R2, 0, 500)
+                logp = logp + stats.uniform.logpdf(T2, 100, 1000)
+                logp = logp + stats.uniform.logpdf(R2, 10000,  120000)
                 
         elif self.model == "PowerLaw":
             alpha = p[0]
@@ -1133,7 +1133,7 @@ class BBFit:
         to start the MCMC with.
         '''
 
-        lam = np.linspace(3000, 25000, 2000)
+        lam = np.linspace(np.min(self.wls)*0.9, np.max(self.wls)*1.1, 2000)
         a_v_wls = extinction.fitzpatrick99(self.wls, a_v=self.av_mw, unit='aa')
         reddening = 10**(0.4*a_v_wls)
         
@@ -1168,7 +1168,7 @@ class BBFit:
         elif self.model == "BlackBody_Av":
             flux_ini = self._model_av_r_2(lam, self.initT1, self.initR1, self.av_host)
 
-            #p0 = (self.initT1, self.initR1, self.av_host)
+            p0 = (self.initT1, self.initR1, self.av_host)
             
             print ("Initial ", p0)
             
@@ -1449,8 +1449,9 @@ class BBFit:
         
         samples = samples[:,0:ndim]  
         plt.figure(figsize=(8,8))
-        fig = corner.corner(samples, labels=labels[0:ndim])
-        plt.title("MJD: %.2f"%self.mjd)
+        fig = corner.corner(samples, labels=labels[0:ndim], quantiles=[0.16, 0.5, 0.84],
+                       show_titles=True, title_kwargs={"fontsize": 12})
+        fig.suptitle("MJD: %.2f"%self.mjd)
         name = self._get_save_path(savefile, "mcmc_posteriors")
         plt.savefig(name)
         plt.close("all")
@@ -1503,8 +1504,8 @@ class BBFit:
             plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$ Av: %.2f"%(self.T, self.R, self.L, self.Av))    
 
         elif self.model == "BlackBody2_Av":
-            fluxbb_red = self._model_av(lam, (self.T, self.R, self.Av))
-            fluxbb_secondary_red = self._model_av(lam, (self.Tsec, self.Rsec, self.Av))
+            fluxbb_red = self._model2_av(lam, (self.T, self.R, self.Av))
+            fluxbb_secondary_red = self._model2_av(lam, (self.Tsec, self.Rsec, self.Av))
             fluxbb_with_seconday = self._model2_av(lam, (self.T, self.R, self.Av, self.Tsec, self.Rsec))
 
             plt.plot(lam, fluxbb_red, "k-", label="BB1 fit + reddening")
