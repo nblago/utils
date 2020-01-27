@@ -130,8 +130,8 @@ def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
 
     
     newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
-    newcat["ra"] = catalog["raMean"]
-    newcat["dec"] = catalog["decMean"]
+    newcat["ra"] = catalog["RaMean"]
+    newcat["dec"] = catalog["DecMean"]
     newcat["mag"] = catalog["rMeanPSFMag"]
     
     return newcat
