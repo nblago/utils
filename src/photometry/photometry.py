@@ -92,8 +92,9 @@ class Photometry:
             'Err_g':'dg', 'Err_r':'dr', 'Err_i':'di', 'Err_z':'dz', 'Err_y':'dy',
             'gmag':'g', 'rmag':'r', 'imag':'i', 'zmag':'z', 'ymag':'y',\
              'e_gmag':'dg', 'e_rmag':'dr', 'e_imag':'di', 'e_zmag':'dz', 'e_ymag':'dy',
-             'j_m':'J',   'j_cmsig':'dJ', 'h_m':'H', 'h_cmsig':'dH', 'k_m':'K', 'k_cmsig':'dK', 'Ks':'K', 'Ks + clear':'K'}
-            
+             'j_m':'J',   'j_cmsig':'dJ', 'h_m':'H', 'h_cmsig':'dH', 'k_m':'K', 'k_cmsig':'dK', 'Ks':'K', 'Ks + clear':'K',
+             'SDSS-G': 'g', 'SDSS-R':'r', 'SDSS-I':'i', 'SDSS-Z':'z'}
+
                         
         #Dictionary where we choose which other filter we require for zeropoint 
         # colour term correction.
@@ -600,7 +601,11 @@ class Photometry:
         else:
             mjd = Time(fitsutils.get_par(imagefile, 'DATE-OBS', ext=self.ext)).mjd
 
-        bmjd = self._compute_bmjd(imagefile, ras, decs)
+        try:
+            bmjd = self._compute_bmjd(imagefile, ras, decs)
+        except ValueError:
+            bmjd = 0
+            print ('Error when computing BMJD.')
         
         zp = fitsutils.get_par(imagefile, 'ZP', self.ext)
         zperr = fitsutils.get_par(imagefile, 'ZPERR', self.ext)
@@ -1079,12 +1084,28 @@ class Photometry:
 
 
 
-def usage_case(f, ra, dec):
+def usage_case(f, ra, dec, n_try=0, max_tries=1):
+    
+    from urllib import request
     
     phot = Photometry()
     phot.minmag = 15
     phot.maxmag = 19
+    
+    #Abort if we tried already the maximum amount of times.
+    if n_try >= max_tries:
+        print ('''Error, number of tries reached the max allowed number of times: %d. 
+               Aborting with this image.'''%max_tries)
+        return
+    
     try:
         phot.measure_mag(f, ra=ra, dec=dec, unify_headers=False)
     except TypeError:
-        print ('ERRROR detected with file %s. Probably exposure is weathered out.'%f)
+        print ('ERROR detected with file %s. Probably exposure is weathered out.'%f)
+    except KeyError:
+        print ('ERROR, because this band is not contained in the base survey.')
+    except IndexError:
+        print ('Error, probably not enough sources on image.')
+    except request.URLError:
+        print ('Error, the web site Timed Out! Trying again.')
+        usage_case(f, ra, dec, n_try=n_try+1, max_tries=1)
