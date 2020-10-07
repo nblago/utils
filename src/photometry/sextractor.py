@@ -10,9 +10,9 @@ import shutil
 import subprocess
 import numpy as np
 
+abspath = os.path.dirname(__file__)
 
-
-SEXCONFIG = os.path.abspath(os.path.join('../../config/daofind.sex'))
+SEXCONFIG = os.path.abspath(os.path.join(abspath, '../../config/daofind.sex'))
 
 if os.path.isfile(SEXCONFIG):
     print ('Found sextractor configuration file: %s'%SEXCONFIG)
