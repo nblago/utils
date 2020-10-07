@@ -31,6 +31,9 @@ if not 'PYSYN_CDBS' in os.environ.keys():
     os.environ['PYSYN_CDBS'] = "/Users/USER/SOMEWHERE/pysynphot_files"
 print ('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
 
+
+
+
 import pysynphot as ps
         
 class BBFit:            
@@ -775,8 +778,8 @@ class BBFit:
             if T1 < 0 or R1 < 0:
                 return -np.inf
     
-            logp = stats.uniform.logpdf(T1, 10, 1000)
-            logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
+            logp = stats.uniform.logpdf(T1, 10, 15000)
+            logp = logp + stats.uniform.logpdf(R1, 1,  12000)
         
         if self.model =="BlackBody_Av":
             
@@ -787,7 +790,7 @@ class BBFit:
             if T1 < 0 or R1 < 0 or av < 0:
                 return -np.inf
             else:
-                logp = stats.uniform.logpdf(T1, 10, 1000)
+                logp = stats.uniform.logpdf(T1, 10, 15000)
                 logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
                 logp = logp + stats.uniform.logpdf(av, 0,  3)
 
@@ -800,10 +803,10 @@ class BBFit:
             if T1 < 0 or T2 > T1 or T2 < 0 or R1 < 0 or R2<0:
                 return - np.inf
             else:
-                logp = stats.uniform.logpdf(T1, 100, 1000)
-                logp = logp + stats.uniform.logpdf(R1, 10000,  120000)
-                logp = logp + stats.uniform.logpdf(T2, 100, 1000)
-                logp = logp + stats.uniform.logpdf(R2, 10000, 120000)
+                logp = stats.uniform.logpdf(T1, 100, 10000)
+                logp = logp + stats.uniform.logpdf(R1, 10,  12000)
+                logp = logp + stats.uniform.logpdf(T2, 10, 5000)
+                logp = logp + stats.uniform.logpdf(R2, 10, 12000)
 
         elif self.model == "BlackBody2_Av":
             T1 = p[0] 
@@ -944,13 +947,10 @@ class BBFit:
                 self.Rsecerr1 = Rsec - Rsec1
                 self.Rsecerr2 = Rsec2 - Rsec
 
-                Lsec = self._get_bol_lum(Tsec, Rsec)
-                Lerr1 = Lsec - self._get_bol_lum(Tsec1, Rsec1)
-                Lerr2 = self._get_bol_lum(Tsec2, Rsec2) - Lsec
+                self.Lsec = self._get_bol_lum(Tsec, Rsec)
+                self.Lsecerr1 = self.Lsec - self._get_bol_lum(Tsec1, Rsec1)
+                self.Lsecerr2 = self._get_bol_lum(Tsec2, Rsec2) - self.Lsec
                 
-                self.L = self.L + Lsec
-                self.Lerr1 = np.sqrt(self.Lerr1**2 + Lerr1**2)
-                self.Lerr2 = np.sqrt(self.Lerr2**2 + Lerr2**2)
             
         elif self.model=="PowerLaw":
             alpha1, alpha, alpha2 =  self._get_max_and_intervals(self.sampler.flatchain[:,0])
@@ -1042,11 +1042,12 @@ class BBFit:
             elif self.model == "BlackBody2":
                     
                 if not exists:
-                    outfile.write("mjd T Terr1 Terr2 R Rerr1 Rerr2 L Lerr1 Lerr2 Tsec Tsecerr1 Tsecerr2 Rsec Rsecerr1 Rsecerr2 Av_MW\n")
-                outfile.write("%.5f %.3f %.3f %.3f %.3f %.3f %.3f %.3e %.3e %.3e %.3f %.3f %.3f %.3f %.3f %.3f %.3f\n"%\
+                    outfile.write("mjd T Terr1 Terr2 R Rerr1 Rerr2 L Lerr1 Lerr2 Tsec Tsecerr1 Tsecerr2 Rsec Rsecerr1 Rsecerr2 Lsec Lsecerr1 Lsecerr2 Av_MW\n")
+                outfile.write("%.5f %.3f %.3f %.3f %.3f %.3f %.3f %.3e %.3e %.3e %.3f %.3f %.3f %.3f %.3f %.3f %.3e %.3e %.3e %.3f \n"%\
                     (self.mjd, self.T, self.Terr1, self.Terr2, self.R, self.Rerr1, self.Rerr2, \
                         self.L, self.Lerr1, self.Lerr2, 
-                        self.Tsec, self.Tsecerr1, self.Tsecerr2, self.Rsec, self.Rsecerr1, self.Rsecerr2, self.av_mw))
+                        self.Tsec, self.Tsecerr1, self.Tsecerr2, self.Rsec, self.Rsecerr1, self.Rsecerr2, \
+                        self.Lsec, self.Lsecerr1, self.Lsecerr2, self.av_mw))
                         
             elif self.model == "BlackBody2_Av":
                     
@@ -1494,14 +1495,14 @@ class BBFit:
         if self.model == "BlackBody":
             fluxbb = self._model(lam, (self.T, self.R))
             plt.plot(lam, fluxbb, "k-", label="BB fit")
-            plt.title("T: %.2f K R:%.2f R$_{\odot}$ Lumiosity %.2e L$_{\odot}$"%(self.T, self.R, self.L))    
+            plt.title("T: %d K R:%d R$_{\odot}$ Lumiosity %.2e L$_{\odot}$"%(self.T, self.R, self.L))    
 
         elif self.model == "BlackBody_Av":
             fluxbb = self._model(lam, (self.T, self.R))
             fluxbb_red = self._model_av_r(lam, (self.T, self.R, self.Av))
             plt.plot(lam, fluxbb, "k-", label="BB fit")
             plt.plot(lam, fluxbb_red, "red", label="BB fit + reddening")
-            plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$ Av: %.2f"%(self.T, self.R, self.L, self.Av))    
+            plt.title("T: %.1f K R:%.1f R$_{\odot}$ Lumiosity %.1e L$_{\odot}$ Av: %.2f"%(np.round(self.T,0), np.round(self.R,0), np.round(self.L,1), self.Av))    
 
         elif self.model == "BlackBody2_Av":
             fluxbb_red = self._model2_av(lam, (self.T, self.R, self.Av))
@@ -1522,7 +1523,7 @@ class BBFit:
             plt.plot(lam, fluxbb_primary, "k-", label="BB1 fit")
             plt.plot(lam, fluxbb_secondary, "k--", label="BB2 fit")
             plt.plot(lam, fluxbb_with_seconday, "green", label="BB1 + BB2")
-            plt.title("T: %.1f K R:%.1f R$_{\odot}$ T2: %.1f R2: %.1f"%(self.T, \
+            plt.title("T: %d K R:%d R$_{\odot}$ T2: %d R2: %d"%( self.T, \
                       self.R, self.Tsec, self.Rsec)) 
                       
         elif self.model == "PowerLaw":
@@ -1567,7 +1568,7 @@ class BBFit:
             #Prints the best parameters
             print ('''
                         Temperature:    %.3f -%.3f +%.3f K
-                        Radius:         %.3f -%.3f +%.3f R$_{\odot}$
+                        Radius:         %.2e -%.2e +%.2e R$_{\odot}$
                         Luminosity       %.3e -%.3e +%.3e L$_{\odot}$'''%(\
             self.T, self.Terr1, self.Terr2, \
             self.R, self.Rerr1, self.Rerr2, \
@@ -1579,7 +1580,9 @@ class BBFit:
             
         if self.model == "BlackBody2":
             print ("                        Temperature2:    %.1f -%.1f +%.1f K"%(self.Tsec, self.Tsecerr1, self.Tsecerr2))
-            print ("                        Radius2:         %.1f -%.1f +%.1f R$_{\odot}$"%(self.Rsec, self.Rsecerr1, self.Rsecerr2))        
+            print ("                        Radius2:         %.2e -%.2e +%.2e R$_{\odot}$"%(self.Rsec, self.Rsecerr1, self.Rsecerr2))  
+            print ("                        Luminosity2      %.3e -%.3e +%.3e L$_{\odot}$"%(self.Lsec, self.Lsecerr1, self.Lsecerr2))
+
         
         if self.model == "BlackBody2_Av":
             print ("                        Av:    %.1f -%.1f +%.1f K"%(self.Av, self.Averr1, self.Averr2))

@@ -93,7 +93,7 @@ class Photometry:
             'gmag':'g', 'rmag':'r', 'imag':'i', 'zmag':'z', 'ymag':'y',\
              'e_gmag':'dg', 'e_rmag':'dr', 'e_imag':'di', 'e_zmag':'dz', 'e_ymag':'dy',
              'j_m':'J',   'j_cmsig':'dJ', 'h_m':'H', 'h_cmsig':'dH', 'k_m':'K', 'k_cmsig':'dK', 'Ks':'K', 'Ks + clear':'K',
-             'SDSS-G': 'g', 'SDSS-R':'r', 'SDSS-I':'i', 'SDSS-Z':'z'}
+             'SDSS-G': 'g', 'SDSS-R':'r', 'SDSS-I':'i', 'SDSS-Z':'z', 'MK-H':'H'}
 
                         
         #Dictionary where we choose which other filter we require for zeropoint 
@@ -123,6 +123,7 @@ class Photometry:
         self.gain_keyword = 'GAIN'
         self.pixscale_keyword = 'PIXSCALE'
         self.rdnoise_keyword = 'RDNOISE'
+        self.filter_keyword = 'FILTER'
         self.ext = 1
         self.minmag = 14
         self.maxmag = 20
@@ -275,7 +276,7 @@ class Photometry:
             
         
         #Extract the filter
-        fheader = f[self.ext].header['FILTER']
+        fheader = f[self.ext].header[self.filter_keyword]
         band = self.filter_dic.get(fheader, fheader)
     
         #Extract the WCS
@@ -592,7 +593,7 @@ class Photometry:
             decs = [decs]
             
         data = fits.open(imagefile)[self.ext].data
-        filt = fitsutils.get_par(imagefile, 'FILTER', self.ext)
+        filt = fitsutils.get_par(imagefile, self.filter_keyword, self.ext)
         
         
         # Calculate BJDs
@@ -1090,7 +1091,8 @@ def usage_case(f, ra, dec, n_try=0, max_tries=1):
     
     phot = Photometry()
     phot.minmag = 15
-    phot.maxmag = 19
+    phot.maxmag = 20
+    phot.filter_keyword = 'FILTER1'
     
     #Abort if we tried already the maximum amount of times.
     if n_try >= max_tries:

@@ -122,16 +122,16 @@ def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     # Read RA, Dec and magnitude from CSV 
     catalog = Table.read("/tmp/ps1_cat.csv", format="ascii.csv", header_start=1)
 
-    mask = (catalog["nDetections"]>4) * (catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) *\
-    (catalog["iMeanPSFMag"] - catalog["iMeanKronMag"] < 0.05) #This last one to select stars.
+    mask = (catalog["nDetections"]>3) * (catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) *\
+    (catalog["iMeanPSFMag"] - catalog["iMeanKronMag"] < 0.1) #This last one to select stars.
     
     #*(catalog["rMeanPSFMag"] > minmag) * (catalog["rMeanPSFMag"] < maxmag) 
     catalog = catalog[mask]
 
     
     newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
-    newcat["ra"] = catalog["raMean"]
-    newcat["dec"] = catalog["decMean"]
+    newcat["ra"] = catalog["RaMean"]
+    newcat["dec"] = catalog["DecMean"]
     newcat["mag"] = catalog["rMeanPSFMag"]
     
     return newcat
@@ -247,7 +247,8 @@ def get_cutout(ra, dec, name, rad, debug=True):
     urlretrieve(image_url, '/tmp/tmp_%s.jpg'%name)
     
     
-def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=True, telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan, image_file=None):
+def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=True, \
+               telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan, image_file=None):
     '''
     Creates a PDF with the finder chart for the object with the specified name and coordinates.
     It queries the PS1 catalogue to obtain nearby offset stars and get an R-band image as background.
@@ -298,14 +299,15 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         print (catalog)
 
     
-    if (len(catalog)<3):
+    '''if (len(catalog)<3):
         if debug: print ("Looking for a bit fainter stars up to mag: %.2f"%(maxmag+0.25))
         catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag+0.5)
 
     if (len(catalog)<3):
         print ("Restarting with larger radius %.2f arcmin"%(rad*60+0.5))
-        get_finder(ra, dec, name, rad+0.5/60, directory=directory, minmag=minmag, maxmag=maxmag+0.5, mag=mag, starlist=starlist, telescope=telescope)
-        return
+        get_finder(ra, dec, name, rad+0.5/60, directory=directory, minmag=minmag, \
+                   maxmag=maxmag+0.5, mag=mag, starlist=starlist, telescope=telescope, image_file=image_file)
+        return'''
         
     if (not catalog is None and len(catalog)>0):
         np.random.shuffle(catalog)
@@ -318,12 +320,18 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     
     if (debug): print (catalog)
     
+    print ('Image file:', image_file)
+
     if image_file is None:
         image_file = get_fits_image(ra, dec, rad, debug=debug)    
         image = fits.open(image_file)
     else:
+        print ('Reading custom fits')
         image = fits.open(image_file)
-        image = np.rot90(np.rot90(image))
+        try:
+            image = np.rot90(np.rot90(image[0].data))
+        except ValueError:
+            print ('Rotation failed')
 
 
     if image_file is None or image is None:
@@ -356,8 +364,8 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     vmax=np.percentile(image[0].data.flatten(), 99.0))
     
     # Mark target
-    plt.plot([target_pix[0,0]+15,(target_pix[0,0]+10)],[target_pix[0,1],(target_pix[0,1])], 'g-', lw=2)
-    plt.plot([target_pix[0,0],(target_pix[0,0])],[target_pix[0,1]+10,(target_pix[0,1])+15], 'g-', lw=2)
+    plt.plot([target_pix[0,0]+15,(target_pix[0,0]+5)],[target_pix[0,1],(target_pix[0,1])], 'g-', lw=2)
+    plt.plot([target_pix[0,0],(target_pix[0,0])],[target_pix[0,1]+5,(target_pix[0,1])+15], 'g-', lw=2)
     plt.annotate(name, xy=(target_pix[0,0], target_pix[0,1]),  xycoords='data',xytext=(22,-3), textcoords='offset points')
     
     # Mark and label reference stars
@@ -510,5 +518,5 @@ if __name__ == '__main__':
         print ('Assuming that the telescope you observe will be P200. If it is "Keck", please specify otherwise.')
 
     
-    get_finder(ra, dec, name, rad, telescope=telescope, debug=False, minmag=7, maxmag=17)
+    get_finder(ra, dec, name, rad, telescope=telescope, debug=False, minmag=7, maxmag=15)
 
