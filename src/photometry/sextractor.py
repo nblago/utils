@@ -12,7 +12,7 @@ import numpy as np
 
 
 
-SEXCONFIG = os.path.abspath(os.path.join('../config/daofind.sex'))
+SEXCONFIG = os.path.abspath(os.path.join('../../config/daofind.sex'))
 
 if os.path.isfile(SEXCONFIG):
     print ('Found sextractor configuration file: %s'%SEXCONFIG)
