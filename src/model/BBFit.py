@@ -32,7 +32,15 @@ if not 'PYSYN_CDBS' in os.environ.keys():
 print ('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])
 
 
+'''os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
+# Add the environment variable which points to the filter response files for the bands we are interested in.
+if not 'PYSYN_CDBS' in os.environ.keys():
+    print("Adding the Pysynphot environment:")
+    os.environ['PYSYN_CDBS'] = "/scratch/Software/pysynphot_files/cdbs/"
+print('PYSYN_CDBS environment variable set to: ', os.environ['PYSYN_CDBS'])'''
 
+
+os.environ['PYSYN_CDBS'] = "/Users/nadiablago/Documents/Software/pysynphot_files/"
 
 import pysynphot as ps
         
@@ -779,7 +787,7 @@ class BBFit:
                 return -np.inf
     
             logp = stats.uniform.logpdf(T1, 10, 15000)
-            logp = logp + stats.uniform.logpdf(R1, 1,  12000)
+            logp = logp + stats.uniform.logpdf(R1, 1,  50000)
         
         if self.model =="BlackBody_Av":
             
@@ -1475,26 +1483,36 @@ class BBFit:
         
             
 
-    def plot_fit(self):
+    def plot_fit(self, lambdaFlambda=False):
         '''
         Plots the best fit model to the data.
         '''
         
-        lam = np.linspace( np.min(self.wls) -500 , np.max(self.wls) + 500, 1000)
+        lam = np.linspace( np.min(self.wls) -1500 , np.max(self.wls) + 1500, 1000)
         
         plt.clf()
         plt.figure(figsize=(8,6))
         mask_lims = self.fluxerrs<0
-        plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
-        plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
+        
+        if lambdaFlambda:
+            factor_obs=self.wls
+        else:
+            factor_obs=np.ones_like(self.wls)
+        plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims]*factor_obs[~mask_lims], yerr=self.fluxerrs[~mask_lims]*factor_obs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
+        plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims]*factor_obs[mask_lims], yerr=self.fluxes[mask_lims]*0.2*factor_obs[mask_lims], fmt="o", color="b", uplims=True)
    
      
         for i in range(len(self.wls)):
-                plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i], alpha=.4, fontsize=8)
+                plt.text(self.wls[i], self.fluxes[i]*1.01*factor_obs[i], self.bands[i], alpha=.4, fontsize=8)
         
         if self.model == "BlackBody":
             fluxbb = self._model(lam, (self.T, self.R))
-            plt.plot(lam, fluxbb, "k-", label="BB fit")
+            if lambdaFlambda:
+                factor = lam
+            else:
+                factor = np.ones_like(lam)
+                
+            plt.plot(lam, fluxbb*factor, "k-", label="BB fit")
             plt.title("T: %d K R:%d R$_{\odot}$ Lumiosity %.2e L$_{\odot}$"%(self.T, self.R, self.L))    
 
         elif self.model == "BlackBody_Av":
@@ -1549,8 +1567,14 @@ class BBFit:
         ymin, ymax = plt.ylim()
         #plt.ylim(np.max([ymin, np.min(self.fluxes)*0.01]), ymax)
         plt.xlabel("Wavelength [$\\AA$]")
-        plt.ylabel("log Flux")
-        plt.ylim(ymin=np.min(self.fluxes) * 0.1)
+        if (lambdaFlambda):
+            plt.ylabel("$\\lambda F_{\\lambda}$ [erg/s]")
+            plt.ylim(ymin=np.min(self.fluxes*factor_obs) * 0.1)
+
+        else:
+            plt.ylabel("$F_{\\lambda}$ [erg/s/$\\AA$]")
+            plt.ylim(ymin=np.min(self.fluxes) * 0.1)
+            
         plt.yscale("log")
         plt.legend()
         name = self._get_save_path(None, "mcmc_best_fit_model")
@@ -1567,16 +1591,16 @@ class BBFit:
         
             #Prints the best parameters
             print ('''
-                        Temperature:    %.3f -%.3f +%.3f K
-                        Radius:         %.2e -%.2e +%.2e R$_{\odot}$
-                        Luminosity       %.3e -%.3e +%.3e L$_{\odot}$'''%(\
+                        Temperature: \t %.3f -%.3f +%.3f K
+                        Radius: \t\t %.2e -%.2e +%.2e R$_{\odot}$
+                        Luminosity: \t %.3e -%.3e +%.3e L$_{\odot}$'''%(\
             self.T, self.Terr1, self.Terr2, \
             self.R, self.Rerr1, self.Rerr2, \
             self.L, self.Lerr1, self.Lerr2))
             
         
         if self.model == "BlackBody_Av":
-            print ("            Av:    %.1f -%.1f +%.1f K"%(self.Av, self.Averr1, self.Averr2))
+            print ("                        Av: \t\t\t %.1f -%.1f +%.1f mag"%(self.Av, self.Averr1, self.Averr2))
             
         if self.model == "BlackBody2":
             print ("                        Temperature2:    %.1f -%.1f +%.1f K"%(self.Tsec, self.Tsecerr1, self.Tsecerr2))
@@ -1585,7 +1609,7 @@ class BBFit:
 
         
         if self.model == "BlackBody2_Av":
-            print ("                        Av:    %.1f -%.1f +%.1f K"%(self.Av, self.Averr1, self.Averr2))
+            print ("                        Av:    %.1f -%.1f +%.1f mag"%(self.Av, self.Averr1, self.Averr2))
             print ("                        Temperature2:    %.1f -%.1f +%.1f K"%(self.Tsec, self.Tsecerr1, self.Tsecerr2))
             print ("                        Radius2:         %.1f -%.1f +%.1f R$_{\odot}$"%(self.Rsec, self.Rsecerr1, self.Rsecerr2))
         
