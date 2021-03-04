@@ -184,14 +184,14 @@ class Photometry:
                 def_y = hrad#np.argmax(np.sum(sub, axis=1))
         
                 initial_guess = (100, def_x, def_y, def_fwhm, def_fwhm, 0, np.percentile(sub, 40))
-                popt, pcov = opt.curve_fit(self._twoD_Gaussian, (X, Y), sub.flatten(), p0=initial_guess, maxfev = 5000)
+                popt, pcov = opt.curve_fit(self._twoD_Gaussian, (X, Y), sub.flatten(), p0=initial_guess, maxfev = 10000)
                 amplitude=popt[0]
                 xpos = popt[1]
                 ypos = popt[2]
                 fwhm_x = np.abs(popt[3])*2*np.sqrt(2*np.log(2))*pix2ang
                 fwhm_y = np.abs(popt[4])*2*np.sqrt(2*np.log(2))*pix2ang
-                background=np.maximum(0.001, popt[-1])
-                detected = ~np.isnan(fwhm_x)*~np.isnan(fwhm_y)*(amplitude > 1)*(0.33<(fwhm_y/fwhm_x)<3) \
+                background=np.maximum(np.percentile(sub.flatten(), 1), popt[-1])
+                detected = ~np.isnan(fwhm_x)*~np.isnan(fwhm_y)*(amplitude > 0)*(0.33<(fwhm_y/fwhm_x)<3) \
                     * (amplitude/background > 0.5) * (np.abs(xpos)<2*hrad) * (np.abs(ypos)<2*hrad) 
     
             #We exceeded the number of iterations, meaning the Gaussian is not there
@@ -217,24 +217,24 @@ class Photometry:
             
             if (detected & plot):
                 data_fitted = self._twoD_Gaussian((X, Y), *popt)
-                
+                plt.figure(figsize=(10,5))
                 fig, (ax, ax2) = plt.subplots(1, 2)
-                ax.hold(True)
-                ax.imshow(sub, cmap=plt.cm.jet, origin='bottom', extent=(x.min(), x.max(), y.min(), y.max()))
+                ax.imshow(sub, cmap=plt.cm.jet, origin='lower', extent=(x.min(), x.max(), y.min(), y.max()))
                 ax.contour(X, Y, data_fitted.reshape(sub.shape[0], sub.shape[1]), 5, colors='w')
                 plt.title("DETECTED X,Y = %d,%d\n S/N:%.2f %.2f %.2f"%(x_i,y_i, amplitude/background, fwhm_x, fwhm_y))
-                ax2.imshow(sub-data_fitted.reshape(sub.shape[0], sub.shape[1]), cmap=plt.cm.jet, origin='bottom', extent=(x.min(), x.max(), y.min(), y.max()))
+                ax2.imshow(sub-data_fitted.reshape(sub.shape[0], sub.shape[1]), cmap=plt.cm.jet, origin='lower', extent=(x.min(), x.max(), y.min(), y.max()))
                 ax2.contour(X, Y, data_fitted.reshape(sub.shape[0], sub.shape[1]), 5, colors='w')
                 ax.scatter(def_x, def_y, marker="*", s=100, color="yellow")
                 figname = os.path.join( self._plotpath, os.path.basename(imfile)+"_gauss_%d.png"%i)
                 plt.savefig(figname)
                 plt.close()
-            if ((not detected) & plot):           
+            if ((not detected) & plot):      
+                plt.figure(figsize=(5,5))
                 fig, ax = plt.subplots(1)
-                ax.hold(True)
-                ax.imshow(sub, cmap=plt.cm.jet, origin='bottom', extent=(x.min(), x.max(), y.min(), y.max()))
+                ax.imshow(sub, cmap=plt.cm.jet, origin='lower', extent=(x.min(), x.max(), y.min(), y.max()))
                 plt.title("NOT DETECTED X,Y = %d,%d\n S/N:%.2f %.2f %.2f"%(x_i,y_i, amplitude/background, fwhm_x, fwhm_y))
                 figname = os.path.join( self._plotpath, os.path.basename(imfile)+"_ngauss_%d.png"%i)
+                plt.tight_layout()
                 plt.savefig(figname)
                 plt.close()
                 
@@ -244,7 +244,7 @@ class Photometry:
     
     # Read the positions of our stars from SDSS.
     
-    def _extract_star_sequence(self, imfile, survey='ps1', minmag=14.5, maxmag=20, plot=True, debug=False):
+    def _extract_star_sequence(self, imfile, survey='PS1V3OBJECTS', minmag=14.5, maxmag=20, plot=True, debug=False):
         '''
         Given a fits image: imfile and a the name of the band which we want to extract the sources from,
         it saves the extracted sources into  '/tmp/sdss_cat_det.txt' file.
@@ -359,7 +359,7 @@ class Photometry:
             self.logger.error( "Problems with the catalogue for the image")
             return False
 
-        print ("Renamed catalog", catalog[0])
+        print ("Length: %d"%len(catalog), "Renamed catalog", catalog[0])
         
         if 'd'+band in catalog.colnames:
             #Make sure that the filter we want to calibrate and the color filter are not limits
@@ -401,6 +401,7 @@ class Photometry:
         else:
             mask3 = (catalog[band].data.data > minmag)*(catalog[band].data.data < maxmag)
 
+        print ("Stars left: mask1 %d, mask2 %d, mask3 %d"%(np.count_nonzero(mask1), np.count_nonzero(mask2), np.count_nonzero(mask3)))
         #Combine all masks
         mask = mask1 * mask2 * mask3
         
@@ -433,6 +434,7 @@ class Photometry:
     
         catalog_det.write(cat_file, format="ascii.csv", overwrite=True)
         self.logger.info( "Saved catalogue stars to %s"%cat_file )
+        print( "Saved catalogue stars to %s"%os.path.abspath(cat_file))
     
         #Find FWHM for this image            
         out = self._find_fwhm(imfile, catalog_det['xpos'], catalog_det['ypos'], plot=debug)
@@ -541,7 +543,7 @@ class Photometry:
                 #Log into a file
                 logging.basicConfig(format=FORMAT, filename=os.path.join(self._logpath, "rcred_{0}.log".format(timestamp)), level=logging.INFO)
                 self.logger = logging.getLogger('zeropoint')
-                print ("Logger created as %s"%os.path.join(self._logpath, "rcred_{0}.log".format(timestamp)))
+                print ("Logger created as %s"%os.path.abspath(os.path.join(self._logpath, "rcred_{0}.log".format(timestamp))))
             except:
                 logging.basicConfig(format=FORMAT, filename=os.path.join("/tmp", "rcred_{0}.log".format(timestamp)), level=logging.INFO)
                 self.logger= logging.getLogger("zeropoint")
@@ -707,7 +709,7 @@ class Photometry:
         phot = aperture_photometry(data, pix_aperture)
         phot['annulus_median'] = bkg_median
         phot['annulus_std'] = std_counts
-        phot['aper_bkg'] = bkg_median * pix_aperture.area()
+        phot['aper_bkg'] = bkg_median * pix_aperture.area
         phot['aper_sum_bkgsub'] = phot['aperture_sum'] - phot['aper_bkg']
     
     
@@ -722,7 +724,7 @@ class Photometry:
         phot['inst_mag'] = inst_mag
         
         #Noise is the poisson noise of the source plus the background noise for the extracted area
-        err = np.sqrt (flux + pix_aperture.area() * std_counts**2)
+        err = np.sqrt (flux + pix_aperture.area * std_counts**2)
     
         #Transform pixels to magnitudes
         flux2 = gain * (phot['aper_sum_bkgsub']+err) / exptime
@@ -762,7 +764,7 @@ class Photometry:
         
     
     
-    def get_zeropoint(self, imgfile, survey, filt, col_filt=None, minmag=10., maxmag=17, plot=False):
+    def get_zeropoint(self, imgfile, survey, filt, col_filt=None, minmag=None, maxmag=None, plot=False):
         '''
         Function that fits the zeropoint for the image through 
         fitting a polynomial to instrumental magnitudes
@@ -792,7 +794,12 @@ class Photometry:
             The colour term for the field.
         '''
          
-         #Select the stars above
+        if minmag is None:
+            minmag = self.minmag
+        if maxmag is None:
+            maxmag = self.maxmag
+            
+        #Select the stars above
         detected_stars_file = self._extract_star_sequence(imgfile, survey=survey, minmag=minmag, maxmag=maxmag, debug=False)
 
         if not detected_stars_file:
@@ -908,6 +915,10 @@ class Photometry:
         self.logger.info("ZP median: %.4f STD: %.4f"%(np.median(zp_vec),np.std(zp_vec)))
         self.logger.info("ZP_err: %.4f color coef: %.4f"%(coefs[1], coefs[0]))
         self.logger.info("ZP_noerr: %.4f color coef: %.4f"%(intercept, slope))
+        
+        print ("ZP median: %.4f STD: %.4f"%(np.median(zp_vec),np.std(zp_vec)))
+        print ("ZP_err: %.4f color coef: %.4f"%(coefs[1], coefs[0]))
+        print ("ZP_noerr: %.4f color coef: %.4f"%(intercept, slope))
         
         #Save the image zeropoint in the header
         fitsutils.update_par(imgfile, "ZP", coefs[1], ext=self.ext)

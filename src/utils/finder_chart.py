@@ -21,6 +21,8 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
+from astroquery.gaia import Gaia
+
 from scipy.ndimage.filters import gaussian_filter
 import warnings
 warnings.filterwarnings("ignore")
@@ -133,6 +135,30 @@ def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     newcat["ra"] = catalog["RaMean"]
     newcat["dec"] = catalog["DecMean"]
     newcat["mag"] = catalog["rMeanPSFMag"]
+    
+    return newcat
+
+def query_gaia_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
+    '''
+    Sends a VO query to the Gaia catalogue.
+    Filters the result by G mangitude (between minmag and maxmag).
+    '''
+
+
+    job = Gaia.launch_job_async('''SELECT ra, dec, phot_g_mean_mag
+                                    FROM gaiaedr3.gaia_source
+                                    WHERE 1=CONTAINS(
+                                      POINT('ICRS', %.6f, %.6f),
+                                      CIRCLE('ICRS',ra, dec, %.6f))
+                                    AND phot_g_mean_mag>=%.2d AND phot_g_mean_mag<%.2f'''%(ra, dec, radius_deg, minmag, maxmag))
+                                    #, dump_to_file=True, output_format='votable')
+
+    catalog = job.get_results()
+
+    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
+    newcat["ra"] = catalog["ra"]
+    newcat["dec"] = catalog["dec"]
+    newcat["mag"] = catalog["phot_g_mean_mag"]
     
     return newcat
 
@@ -290,13 +316,24 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     except:
         ra, dec = hour2deg(ra, dec) 
 
-    if dec < -30:
-        catalog = query_sky_mapper_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
-    else:
-        catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
-    
+    try:
+        catalog = query_gaia_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
+    except Exception as e:
+        print(e)
+        catalog = []
+        
+    if len(catalog)==0:
+        try:
+            if dec < -30:
+                catalog = query_sky_mapper_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
+            else:
+                catalog = query_ps1_catalogue(ra, dec, (rad/2.)*0.95, minmag=minmag, maxmag=maxmag)
+        except Exception as e:
+            print(e)
+            catalog = []
+        
     if (debug):
-        print (catalog)
+        print ("Catalong of %d stars retrieved"%len(catalog), catalog)
 
     
     '''if (len(catalog)<3):
@@ -312,10 +349,9 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     if (not catalog is None and len(catalog)>0):
         np.random.shuffle(catalog)
 
-
-    no_self_object = (np.abs(catalog["ra"]-ra)*np.cos(np.deg2rad(dec))>2./3600)*(np.abs(catalog["dec"]-dec)>2./3600)
-    catalog = catalog[no_self_object]
-    catalog.sort(order='mag')
+        no_self_object = (np.abs(catalog["ra"]-ra)*np.cos(np.deg2rad(dec))>2./3600)*(np.abs(catalog["dec"]-dec)>2./3600)
+        catalog = catalog[no_self_object]
+        #catalog.sort(order='mag')
 
     
     if (debug): print (catalog)
