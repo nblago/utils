@@ -114,12 +114,34 @@ fluxerrs = bb.fluxerrs
 For fitting, the file `test_BBFit.py` shows several examples on how to use the MCMC fitter with different models.
 
 
-
 ### Utils
 
 `finder_chart.py`
 
-Queries PS1 survey (in the North) and SkyMapper (in the south), to obtain the positions of offset stars and provide the background image to locate the transient position.
+Script to make finder charts using the archival images of the PS1 survey (in the North) and SkyMapper (in the South). It also can provide blind offset stars within a given magntiude range (obtained from the Gaia catalogue) and print/store the starlist in Keck/P200 format.
+By default it stores the finder chart in a pdf file in the same location where the script is.
+
+Example from the basic usage from the bash console:
+
+```
+$python finder_chart.py <RA> <Dec> <Name>  <rad [deg]> <telescope [P200|Keck]>
+```
+
+Example within python (more functionality):
+```python
+import finder_chart
+
+ra =100
+dec = 10
+rad = 2./60 #2 arcminutes
+directory = "/Path/to/finder/pdf/output"
+mag = 18.5 #Current mag of the transient
+#If you don't want to use PS1/SkyMapper and have your own follow-up image, you can use it here.
+image_file = "my_own_fits_file_as_background.fits" 
+
+finder_chart.get_finder(ra=ra, dec=dec, name="MyTransient", rad=rad, \
+  directory=".", minmag=15, maxmag=18.5, mag=mag, image_file=image_file)
+```
 
 
 ### Phot
