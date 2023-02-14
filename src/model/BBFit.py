@@ -24,6 +24,9 @@ from astropy.cosmology import FlatLambdaCDM
 import warnings
 from astropy.table import Table
 from scipy.optimize import curve_fit
+from multiprocessing import Pool
+
+import configparser
 
 #If PYSYN_CDBS is not defined, it adds the environment variable which points to the 
 #filter response files for the bands we are interested in.
@@ -59,45 +62,13 @@ class BBFit:
         self.k_B = cnt.k_B.to(u.erg / u.K).value#1.38064852e-16 #erg / K
         
         #Source parameters
-        self.av_host = 0
         self.av_mw = 0
         self.law = "Fitzpatrick"
         self.law_mw = "Fitzpatrick"
         
-        #Black body models
-        self.initT1 = 10000 #K
-        self.initR1 = 1 # Rsun
-        self.initT2 = 3000 #K
-        self.initR2 = 1 # Rsun
-        self.initT3 = 300 #K
-        self.initR2 = 100 # Rsun
-        
         self.z = None
         self.distMpc = None #in Mpc
         self.mjd = 0 
-        
-        #Power law models
-        self.alpha = 0.75
-        self.alphaerr1 = 0
-        self.alphaerr2 = 0
-        self.scale = 1
-        self.scaleerr1 = 0.1
-        self.scaleerr2 = 0.1
-
-        #Disk model (scale is already in the power law model)
-        #Stellar mass, radius, log accretion mass per year, outer radius of accretion disk
-        self.Mstar = 1
-        self.Mstarerr1 = 0.1
-        self.Mstarerr2 = 0.1
-        self.Rstar = 1
-        self.Rstarerr1 = 0.1
-        self.rstarerr2 = 0.1
-        self.logMacc = -8
-        self.logMaccerr1 = -9
-        self.logMaccerr2 = -9
-        self.R_out = 3
-        self.R_outerr1 = 1
-        self.R_outerr2 = 1
         
         #Location for plots
         self.plotdir = "../../data/plots"
@@ -128,7 +99,62 @@ class BBFit:
         self.fluxes = None
         self.fluxerrs = None
         
-        #Output
+        ###########INITIALIZATION#####################
+        #Read specific constraints on the input parameters from the config file
+        config = configparser.ConfigParser()
+        
+        configpath =  os.path.join(os.path.dirname(os.path.abspath(__file__)), "bbfit.ini")       
+        config.read(configpath)
+        
+        print (configpath, config)
+        
+        #Black body models priors
+        self.T1_min = config['BlackBody'].getfloat('T1_min')
+        self.T1_max = config['BlackBody'].getfloat('T1_max')
+        
+        self.R1_min = config['BlackBody'].getfloat('R1_min')
+        self.R1_max = config['BlackBody'].getfloat('R1_max')
+        
+        self.T2_min = config['BlackBody'].getfloat('T2_min')
+        self.T2_max = config['BlackBody'].getfloat('T2_max')
+        
+        self.R2_min = config['BlackBody'].getfloat('R2_min')
+        self.R2_max = config['BlackBody'].getfloat('R2_max')
+        
+        self.T3_min = config['BlackBody'].getfloat('T3_min')
+        self.T3_max = config['BlackBody'].getfloat('T3_max')
+        
+        self.R3_min = config['BlackBody'].getfloat('R3_min')
+        self.R3_max = config['BlackBody'].getfloat('R3_max')
+        
+        self.av_min = config['BlackBody'].getfloat('av_min')
+        self.av_max = config['BlackBody'].getfloat('av_max')
+
+        #Black Power Law models priors
+        self.alpha_min = config['PowerLaw'].getfloat('alpha_min')
+        self.alpha_max = config['PowerLaw'].getfloat('alpha_max')
+
+        self.scale_min = config['PowerLaw'].getfloat('scale_min')
+        self.scale_max = config['PowerLaw'].getfloat('scale_max')
+        
+        #Disk model
+        self.Mstar_min = config['PowerLaw'].getfloat('Mstar_min')
+        self.Mstar_max = config['PowerLaw'].getfloat('Mstar_max')
+
+        self.Rstar_min = config['PowerLaw'].getfloat('Rstar_min')
+        self.Rstar_max = config['PowerLaw'].getfloat('Rstar_max')
+
+        self.logMacc_min = config['PowerLaw'].getfloat('logMacc_min')
+        self.logMacc_max = config['PowerLaw'].getfloat('logMacc_max')
+
+        self.R_out_min = config['PowerLaw'].getfloat('R_out_min')
+        self.R_out_max = config['PowerLaw'].getfloat('R_out_max')
+
+
+
+        ###########OUTPUT#####################
+
+        #BlackBody models
         self.T = None
         self.Terr1 = None
         self.Terr2 = None
@@ -166,6 +192,35 @@ class BBFit:
         self.Lter = None
         self.Ltererr1 = None
         self.Ltererr2 = None
+
+        #Power law models
+        self.alpha = None
+        self.alphaerr1 = None
+        self.alphaerr2 = None
+        
+        self.scale = None
+        self.scaleerr1 = None
+        self.scaleerr2 = None
+
+        #Disk model (scale is already in the power law model)
+        #Stellar mass, radius, log accretion mass per year, outer radius of accretion disk
+        self.Mstar = None
+        self.Mstarerr1 = None
+        self.Mstarerr2 = None
+        
+        self.Rstar = None
+        self.Rstarerr1 = None
+        self.Rstarerr2 = None
+        
+        self.logMacc = None
+        self.logMaccerr1 = None
+        self.logMaccerr2 = None
+        
+        self.R_out = None
+        self.R_outerr1 = None
+        self.R_outerr2 = None
+        
+
         
         self.cosmo = FlatLambdaCDM(H0=70, Om0=0.3, Tcmb0=2.725)
         
@@ -224,8 +279,52 @@ class BBFit:
                    
 
            }
+        
+        self._print_config_priors()
 
 
+    def _print_config_priors(self):
+        '''
+        Prints the initial configuration used to initialize the module.
+        
+        '''
+        
+        print("Called BBFit with the following parameters.")
+        print("If they don't match your object, modify the property file bbfit.ini")
+        print("Model %s:"%self.model)
+        
+        if self.model.startswith("BlackBody"):
+            print ("Prior temperature %d < Teff1 < %d"%(self.T1_min, self.T1_max))
+            print ("Prior radius %d < R1 < %d"%(self.R1_min, self.R1_max))
+
+            
+            if self.model.startswith("BlackBody2"):
+                print ("Prior temperature %d < Teff2 < %d"%(self.T2_min, self.T2_max))
+                print ("Prior radius %d < R2 < %d"%(self.R2_min, self.R2_max))
+                
+            if self.model.startswith("BlackBody3"):
+                print ("Prior temperature %d < Teff2 < %d"%(self.T2_min, self.T2_max))
+                print ("Prior radius %d < R2 < %d\n"%(self.R2_min, self.R2_max))
+
+                print ("Prior temperature %d < Teff3 < %d"%(self.T3_min, self.T3_max))
+                print ("Prior radius %d < R3 < %d"%(self.R2_min, self.R2_max))
+
+        if self.model.endswith("Av"):
+                print ("Prior Av %d < Av < %d"%(self.av_min, self.av_mX))
+
+
+        if self.model.startswith("PowerLaw"):
+                print ("Prior alpha %d < alpha < %d"%(self.alpha_min, self.alpha_max))
+                print ("Prior scale %d < scale < %d"%(self.scale_min, self.scale_max))
+
+        if self.model.startswith("Disk"):
+                print ("Prior Mstar %d < Mstar < %d"%(self.Mstar_min, self.Mstar_max))
+                print ("Prior Rstar %d < Rstar < %d"%(self.Rstar_min, self.Rstar_max))
+                print ("Prior logMacc %d < logMacc < %d"%(self.logMacc_min, self.logMacc_max))
+                print ("Prior R_out %d < R_out < %d"%(self.R_out_min, self.R_out_max))
+
+        
+        
     def _matplotlib_init(self):
         '''
         Set up preferences on matplotlib plot appearance.
@@ -856,6 +955,10 @@ class BBFit:
         lp = self._logprior(p)
         if (not np.isinf(lp)):
             lp= self._like(p, xdat, ydat, errdat) + lp
+            
+        else:
+            return -np.inf
+
         return lp
     
     
@@ -873,8 +976,8 @@ class BBFit:
             if T1 < 0 or R1 < 0:
                 return -np.inf
     
-            logp = stats.uniform.logpdf(T1, 10, 15000)
-            logp = logp + stats.uniform.logpdf(R1, 1,  50000)
+            logp = stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
+            logp = logp + stats.uniform.logpdf(R1, self.R1_min,  self.R1_max)
         
         if self.model =="BlackBody_Av":
             
@@ -885,9 +988,9 @@ class BBFit:
             if T1 < 0 or R1 < 0 or av < 0:
                 return -np.inf
             else:
-                logp = stats.uniform.logpdf(T1, 1, 30000)
-                logp = logp + stats.uniform.logpdf(R1, 1,  500)
-                logp = logp + stats.uniform.logpdf(av, 0,  30)
+                logp = stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
+                logp = logp + stats.uniform.logpdf(R1, self.R1_min, self.R1_max)
+                logp = logp + stats.uniform.logpdf(av, self.av_min, self.av_max)
 
         elif self.model == "BlackBody2":
             T1 = p[0] 
@@ -898,16 +1001,12 @@ class BBFit:
             if T1 < 0 or T2 > T1 or T2 < 0 or R1 < 0 or R2<0:
                 return - np.inf
             else:
-                #logp = stats.uniform.logpdf(T1, 100, 10000)
-                #logp = logp + stats.uniform.logpdf(R1, 10,  12000)
-                #logp = logp + stats.uniform.logpdf(T2, 10, 5000)
-                #logp = logp + stats.uniform.logpdf(R2, 10, 12000)
-                logp = stats.uniform.logpdf(T1, 5000, 25000)
-                logp = logp + stats.uniform.logpdf(R1, 12000,  100000)
-                logp = logp + stats.uniform.logpdf(T2, 100, 5000)
-                logp = logp + stats.uniform.logpdf(R2, 1200, 20.e+6)
-                
+                logp = stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
+                logp = logp + stats.uniform.logpdf(R1, self.R1_min, self.R1_max)
+                logp = logp + stats.uniform.logpdf(T2, self.T2_min, self.T2_max)
+                logp = logp + stats.uniform.logpdf(R2, self.R2_min, self.R2_max)
 
+                
         elif self.model == "BlackBody2_Av":
             T1 = p[0] 
             R1 = p[1] 
@@ -919,11 +1018,12 @@ class BBFit:
                 return - np.inf
 
             else:
-                logp = stats.uniform.logpdf(T1, 100, 10000)
-                logp = logp + stats.uniform.logpdf(R1, 0.1,  100)
-                logp = logp + stats.uniform.logpdf(av, 0, 10)
-                logp = logp + stats.uniform.logpdf(T2, 10, 10000)
-                logp = logp + stats.uniform.logpdf(R2, 0.1,  1000)
+                logp = stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
+                logp = logp + stats.uniform.logpdf(R1, self.R1_min, self.R1_max)
+                logp = logp + stats.uniform.logpdf(T2, self.T2_min, self.T2_max)
+                logp = logp + stats.uniform.logpdf(R2, self.R2_min, self.R2_max)
+                logp = logp + stats.uniform.logpdf(av, self.av_min, self.av_max)
+
                 
         elif self.model == "BlackBody3_Av":
             T1 = p[0] 
@@ -938,13 +1038,13 @@ class BBFit:
                 return - np.inf
 
             else:
-                logp = stats.uniform.logpdf(T1, 100, 10000)
-                logp = logp + stats.uniform.logpdf(R1, 0.1,  100)
-                logp = logp + stats.uniform.logpdf(av, 0, 10)
-                logp = logp + stats.uniform.logpdf(T2, 10, 10000)
-                logp = logp + stats.uniform.logpdf(R2, 0.1,  1000)
-                logp = logp + stats.uniform.logpdf(T3, 10, 10000)
-                logp = logp + stats.uniform.logpdf(R3, 0.1,  1000)
+                logp = stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
+                logp = logp + stats.uniform.logpdf(R1, self.R1_min, self.R1_max)
+                logp = logp + stats.uniform.logpdf(T2, self.T2_min, self.T2_max)
+                logp = logp + stats.uniform.logpdf(R2, self.R2_min, self.R2_max)
+                logp = logp + stats.uniform.logpdf(T3, self.T3_min, self.T3_max)
+                logp = logp + stats.uniform.logpdf(R3, self.R3_min, self.R3_max)
+                logp = logp + stats.uniform.logpdf(av, self.av_min, self.av_max)
                 
         elif self.model == "PowerLaw":
             alpha = p[0]
@@ -954,9 +1054,9 @@ class BBFit:
             if av < 0:
                 logp = -np.inf
             else:
-                logp = stats.uniform.logpdf(alpha, 0, 3)
-                logp = logp + stats.uniform.logpdf(scale, 0.1, 100)
-                logp = logp + stats.uniform.logpdf(av, 0, 3)
+                logp = stats.uniform.logpdf(alpha, self.alpha_min, self.alpha_max)
+                logp = logp + stats.uniform.logpdf(scale, self.scale_min, self.scale_max)
+                logp = logp + stats.uniform.logpdf(av, self.av_min, self.av_max)
 
         elif self.model == "PowerLaw_BlackBody":
             alpha = p[0]
@@ -967,11 +1067,11 @@ class BBFit:
             if R1 < 0 or T1 < 0 or alpha < 0:
                 logp = -np.inf
             else:
-                logp = stats.uniform.logpdf(alpha, 0, 3)
-                logp = logp + stats.uniform.logpdf(scale, 0.1, 100)
-                logp = logp + stats.uniform.logpdf(T1, 500, 20000)
-                logp = logp + stats.uniform.logpdf(R1, 0, 500)
-                
+                logp = stats.uniform.logpdf(alpha, self.alpha_min, self.alpha_max)
+                logp = logp + stats.uniform.logpdf(scale, self.scale_min, self.scale_max)
+                logp = logp + stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
+                logp = logp + stats.uniform.logpdf(R1, self.R1_min, self.R1_max)
+
         elif self.model == "Disk":
             
             Mstar = p[0]
@@ -979,22 +1079,13 @@ class BBFit:
             logMacc = p[2]
             R_out = p[3]
             
-            #bb.Mstar = 1e6
-           #bb.Rstar = 1e3
-           #bb.logMacc = -5.0
-           #bb.R_out = 1e5
-    
-            if Rstar < 0 or Mstar < 0 or logMacc < -12 or R_out<0 or R_out < Rstar:
+            if Rstar < 0 or Mstar < 0 or logMacc < -15 or R_out<0 or R_out < Rstar:
                 logp = -np.inf            
             else:
-                '''logp = stats.uniform.logpdf(Mstar, 0, 1.44)
-                logp = logp + stats.uniform.logpdf(Rstar, 0, 10)
-                logp = logp + stats.uniform.logpdf(logMacc, -12, 7)
-                logp = logp + stats.uniform.logpdf(R_out, 0, 50)'''
-                logp = stats.uniform.logpdf(Mstar, 4, 12)
-                logp = logp + stats.uniform.logpdf(Rstar, 2, 7)
-                logp = logp + stats.uniform.logpdf(logMacc, -5, 5)
-                logp = logp + stats.uniform.logpdf(R_out, 3, 9)
+                logp = stats.uniform.logpdf(Mstar, self.Mstar_min, self.Mstar_max)
+                logp = logp + stats.uniform.logpdf(Rstar, self.Rstar_min, self.Rstar_max)
+                logp = logp + stats.uniform.logpdf(logMacc, self.logMacc_min, self.logMacc_max)
+                logp = logp + stats.uniform.logpdf(R_out, self.R_out_min, self.R_out_max)
 
         return logp	
 
@@ -1005,7 +1096,7 @@ class BBFit:
         '''
 
 
-        return np.percentile(x, 34), np.percentile(x, 50), np.percentile(x, 66)
+        return np.percentile(x, 16), np.percentile(x, 50), np.percentile(x, 84)
         #return percent1, maxp, percent2
 
     def _area2rsun(self, A):
@@ -1294,14 +1385,140 @@ class BBFit:
                 name = os.path.join(self.plotdir, "%s_%s_ %.1f_%d.pdf"%(plot_name, self.model, self.mjd, i))
                 
         return name
+                        
+
+
+
+    def  initialize(self, plot=False):
+        '''
+        Will transform the magnitudes to fluxes and use the distance to the object to
+        calculate the luminosity at each wavelength.
+        '''
+
+        if (not os.path.isdir(self.plotdir)):
+            os.makedirs(self.plotdir)
+            print ("Created plot directory %s"%self.plotdir)
+
+        #Directory where to store the results
+        if (not os.path.isdir(self.resdir)):
+            os.makedirs(self.resdir)
+            print ("Created result directory %s"%(self.resdir))
+        self.resfile = os.path.join(self.resdir, self.model + os.path.basename(self.resfile))
+
+        # generate the data  
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")   
+            self.wls, self.fluxes, self.fluxerrs = self._band2flux()
+
+
+
+        if not self.distMpc is None and self.distMpc !=0:
+            print ("Using distance to the source of %.1e Mpc"%self.distMpc)
+            fluxFactor = (4*np.pi*((self.distMpc*u.Mpc).to(u.cm) )**2).value
+
+        elif (self.distMpc is None or self.distMpc==0 )and (not self.z is None and self.z != 0):
+            self.distMpc = self.cosmo.luminosity_distance(self.z)
                 
+            #Compute the flux multiplication factor for the object if it is at distance distMpc
+            #We transform that to cm, as the flux is in erg cm-2 s-1
+            fluxFactor = (4*np.pi*(self.distMpc.to(u.cm) )**2).value
+        
+        else: # self.distMpc is None and self.z is None:
+            #Here we do not use any multiplication flux factor
+            print ("Warning: no redshift or distance provided!")
+            fluxFactor = 1
+            
+        self.fluxes = self.fluxes * fluxFactor
+        self.fluxerrs = self.fluxerrs * fluxFactor
 
-    def _initialize_parameters(self, plot=False):
-        '''
-        Runs the least squares optimiztion routine to find the best initial parameters 
-        to start the MCMC with.
-        '''
 
+    
+    def run(self):
+        '''
+        Runs the main MCMC process. 
+        Retrieves the priors, the likelihood process and computes the posterior probability.
+        '''
+    
+        xs = self.wls
+        ys = self.fluxes
+        errs = self.fluxerrs
+        
+        t = Table([xs, ys, errs], names=['col0', 'col1', 'col2'])
+        t.sort(keys='col0')
+
+        xs = t['col0']
+        ys = t['col1']
+        errs = t['col2']
+        
+        print (self.T2_max)
+        
+        if self.model == "BlackBody":
+            p0_min = np.array([ self.T1_min, self.R1_min])
+            p0_max = np.array([ self.T1_max, self.R1_max])
+        elif self.model == "BlackBody2":
+            print (self.T2_max)
+            p0_min = np.array([ self.T1_min, self.R1_min, self.T2_min, self.R2_min])
+            p0_max = np.array([ self.T1_max, self.R1_max, self.T2_max, self.R2_max])
+        elif self.model == "BlackBody_Av":
+            p0_min = np.array([ self.T1_min, self.R1_min, self.av_min])
+            p0_max = np.array([ self.T1_max, self.R1_max, self.av_max])
+        elif self.model == "BlackBody2_Av":
+            p0_min = np.array([ self.T1_min, self.R1_min, self.T2_min, self.R2_min, self.av_min])
+            p0_max = np.array([ self.T1_max, self.R1_max, self.T2_max, self.R2_max, self.av_max])
+        elif self.model == "BlackBody3_Av":
+            p0_min = np.array([ self.T1_min, self.R1_min, self.T2_min, self.R2_min, self.T3_min, self.R3_min, self.av_min])
+            p0_max = np.array([ self.T1_max, self.R1_max, self.T2_max, self.R2_max, self.T3_mах, self.R3_mах, self.av_max])
+        elif self.model == "PowerLaw":
+            p0_min = np.array([ self.alpha_min, self.scale_min, self.av_min])
+            p0_max = np.array([ self.alpha_max, self.scale_max, self.av_max])
+        elif self.model == "PowerLaw_BlackBody":
+            p0_min = np.array([ self.alpha_min, self.scale_min, self.T1_min, self.R1_min])
+            p0_max = np.array([ self.alpha_max, self.scale_max, self.T1_max, self.R1_max])
+        elif self.model == "Disk":
+            p0_min = np.array([ self.Mstar_min, self.Rstar_min, self.logMacc_min, self.R_out_min])
+            p0_max = np.array([ self.Mstar_max, self.Rstar_max, self.logMacc_max, self.R_out_max])
+        else:
+            print ("-------------------CRITICAL ERROR!----------------------")
+            print ("-------------------UNKNOWN model! %s----------------------"%self.model)
+            print ("-------------------CRITICAL ERROR!----------------------")
+
+            sys.exit()
+            
+        ndim = len(p0_min)
+        
+        #Initialize with a uniform distribution within the given initial parameters
+        p0 = np.random.uniform(low=p0_min, high=p0_max, size=(self.nwalkers, ndim))
+
+ 
+        os.environ["OMP_NUM_THREADS"] = "1"
+    
+        #Parallelisation with Pool
+        with Pool() as pool:
+            
+            sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self._logposterior, args=(xs, ys, errs), pool=pool)
+                
+            
+            pos, lnprob, state = sampler.run_mcmc(p0, self.burnin, progress=True)
+            print ("\nBurning phase finished")
+            sampler.reset()
+            pos, lnprob, state = sampler.run_mcmc(p0, self.niterations, progress=True)
+            print ('Acceptance ratio', sampler.acceptance_fraction)
+        
+            self.sampler = sampler
+    
+            print ("MCMC main phase finished")
+            self._fill_output()
+            self._save_output()
+
+
+    def plot_initial_guess(self):
+        '''
+        Plots the fluxes provided by the user as an initial guess.
+        This function is useful to see within what kind of interval the source could be.
+        
+        '''
+        
+        
         lam = np.linspace(np.min(self.wls)*0.9, np.max(self.wls)*1.1, 2000)
         a_v_wls = extinction.fitzpatrick99(self.wls, a_v=self.av_mw, unit='aa')
         reddening = 10**(0.4*a_v_wls)
@@ -1309,34 +1526,77 @@ class BBFit:
         plt.figure(figsize=(8,6))
         
         if self.model == "BlackBody":
-            flux_ini = self._model_2(lam, self.initT1, self.initR1)
 
-            p0 = (self.initT1, self.initR1)
+            p0 = ( np.average([self.T1_min, self.T1_max]), np.average([self.R1_min, self.R1_max]))
             
+            flux_ini = self._model_2(lam, *p0)
+
             print ("Initial parameters given:", p0)
             
             #Perform a LSQ fit
-            #params, covar = curve_fit(self._model_2, self.wls , self.fluxes, \
-            #p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
-            #flux_end = self._model_2(lam, *params)
+            params, covar = curve_fit(self._model_2, self.wls , self.fluxes, \
+                                      p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
+            flux_end = self._model_2(lam, *params)
             
-            if plot:
-                plt.clf()
-                mask_lims = self.fluxerrs<0
-                plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
-                #plt.plot(lam, flux_end, label="Best fit LSQ")
-                plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
-                plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
 
-                plt.xlabel("Wavelength [A]")
-                plt.ylabel("$F_{\\lambda}$ [erg/s/cm2/A]")
-                plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
-                plt.legend()
-                plt.yscale("log")
-                name = self._get_save_path(None, "fluxes_obs_bb")
-                plt.savefig(name, dpi=200)
+            mask_lims = self.fluxerrs<0
+            plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
+            plt.plot(lam, flux_end, label="Best fit LSQ")
+            plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
+            plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
+
+            plt.xlabel("Wavelength [A]")
+            plt.ylabel("$F_{\\lambda}$ [erg/s/cm2/A]")
+            plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
+            plt.legend()
+            plt.yscale("log")
+            name = self._get_save_path(None, "fluxes_obs_bb")
+            plt.savefig(name, dpi=200)
+            
+        elif self.model == "BlackBody2":
+
+            p0 = ( np.average([self.T1_min, self.T1_max]), np.average([self.R1_min, self.R1_max]),
+                  np.average([self.T2_min, self.T2_max]), np.average([self.R2_min, self.R2_max]))
+            
+            print (  "T1", [self.T1_min, self.T1_max], "R1", [self.R1_min, self.R1_max],
+                        "T2",  [self.T2_min, self.T2_max], "R2", [self.R2_min, self.R2_max])
+            
+            flux_ini = self._model2_r_2(lam, *p0)
+            
+            print ("Initial ", p0)
+            
+            params, covar = curve_fit(self._model2_r_2, self.wls , self.fluxes, \
+                   p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 200000)
                 
-        elif self.model == "BlackBody_Av":
+            print ("Fitted", params)
+            
+            L1 = (cnt.sigma_sb * np.pi * ((params[1] *u.Rsun)**2 * (params[0] * u.K)**4)).to(u.erg/u.s).value
+            L2 = (cnt.sigma_sb * np.pi * ((params[3] *u.Rsun)**2 * (params[2] * u.K)**4)).to(u.erg/u.s).value
+            
+            print ("L1 %.2e, L2 %.2e, L_tot %.2e"%(L1, L2, L1+L2))
+            flux_end = self._model2_r_2(lam, *params)
+            flux_1 = self._model_2(lam, *params[0:2])
+            flux_2 = self._model_2(lam, *params[2:])
+            
+            
+            plt.figure(figsize=(6,4))
+            plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
+            plt.plot(lam, flux_end, label="Best fit LSQ")
+            plt.plot(lam, flux_1, label="BB1")
+            plt.plot(lam, flux_2, label="BB2")
+            mask_lims = self.fluxerrs<0
+            plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
+            plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
+            plt.xlabel("Wavelength [A]")
+            plt.ylabel("$L_{\\lambda}$ [erg/s/A]")
+            plt.legend(loc="best", fontsize=10)
+            plt.ylim(0.1*np.min(self.fluxes), 1.2*np.max(self.fluxes))
+            plt.yscale("log")
+            name = self._get_save_path(None, "fluxes_obs_2bb")
+            plt.savefig(name, dpi=200)
+            print ('Plot stored as ', name)
+                
+        '''elif self.model == "BlackBody_Av":
             flux_ini = self._model_av_r_2(lam, self.initT1, self.initR1, self.av_host)
 
             p0 = (self.initT1, self.initR1, self.av_host)
@@ -1423,35 +1683,6 @@ class BBFit:
                 plt.savefig(name, dpi=200)
                 print ("Saved as ",name)
                 
-        elif self.model == "BlackBody2":
-            flux_ini = self._model2_r_2(lam, self.initT1, self.initR1, self.initT2, self.initR2)
-
-            p0 = (self.initT1, self.initR1, self.initT2, self.initR2)
-            
-            print ("Initial ", p0)
-            
-            #params, covar = curve_fit(self._model2_r_2, self.wls , self.fluxes, \
-            #p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
-            #flux_end = self._model2_r_2(lam, *params)
-            #flux_1 = self._model_2(lam, *params[0:2])
-            #flux_2 = self._model_2(lam, *params[2:])
-            
-            
-            if plot:
-                plt.clf()
-                plt.figure(figsize=(6,4))
-                plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
-                #plt.plot(lam, flux_end, label="Best fit LSQ")
-                #plt.plot(lam, flux_1, label="BB1")
-                #plt.plot(lam, flux_2, label="BB2")
-                plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
-                plt.xlabel("Wavelength [A]")
-                plt.ylabel("$L_{\\lambda}$ [erg/s/A]")
-                plt.legend(loc="best", fontsize=10)
-                plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
-                plt.yscale("log")
-                name = self._get_save_path(None, "fluxes_obs_2bb")
-                plt.savefig(name, dpi=200)
                 
         elif self.model == "PowerLaw":
 
@@ -1531,134 +1762,7 @@ class BBFit:
                 plt.gca().set_xscale("log")
                 name = self._get_save_path(None, "fluxes_obs_disk")
                 plt.savefig(name, dpi=200)
-                print ("Saved fit as %s"%name)
-
-    def  initialize(self, plot=False):
-        '''
-        Will transform the magnitudes to fluxes and use the distance to the object to
-        calculate the luminosity at each wavelength.
-        '''
-
-        if (not os.path.isdir(self.plotdir)):
-            os.makedirs(self.plotdir)
-            print ("Created plot directory %s"%self.plotdir)
-
-        #Directory where to store the results
-        if (not os.path.isdir(self.resdir)):
-            os.makedirs(self.resdir)
-            print ("Created result directory %s"%(self.resdir))
-        self.resfile = os.path.join(self.resdir, self.model + os.path.basename(self.resfile))
-
-        # generate the data  
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")   
-            self.wls, self.fluxes, self.fluxerrs = self._band2flux()
-
-        #Plot the raw fluxes before correcting them.
-        '''if (plot):
-            plt.figure(figsize=(8,6))
-            plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0)
-            for i in range(len(self.wls)):
-                plt.text(self.wls[i], self.fluxes[i]*1.01, self.bands[i].split(",")[-1], alpha=.4)
-            name = self._get_save_path(None, "fluxes_observed")
-            plt.yscale("log")
-            plt.xlabel("Wavelength [A]")
-            plt.ylabel("log (Flux/[erg/cm2/s])")
-            plt.tight_layout()
-            plt.savefig(name, dpi=200)'''
-            
-        if not self.distMpc is None and self.distMpc !=0:
-            print ("Using distance to the source of %.1e Mpc"%self.distMpc)
-            fluxFactor = (4*np.pi*((self.distMpc*u.Mpc).to(u.cm) )**2).value
-
-        elif (self.distMpc is None or self.distMpc==0 )and (not self.z is None and self.z != 0):
-            self.distMpc = self.cosmo.luminosity_distance(self.z)
-                
-            #Compute the flux multiplication factor for the object if it is at distance distMpc
-            #We transform that to cm, as the flux is in erg cm-2 s-1
-            fluxFactor = (4*np.pi*(self.distMpc.to(u.cm) )**2).value
-        
-        else: # self.distMpc is None and self.z is None:
-            #Here we do not use any multiplication flux factor
-            print ("Warning: no redshift or distance provided!")
-            fluxFactor = 1
-            
-        self.fluxes = self.fluxes * fluxFactor
-        self.fluxerrs = self.fluxerrs * fluxFactor
-
-        self._initialize_parameters(plot)
-
-    
-    def run(self):
-        '''
-        Runs the main MCMC process. 
-        Retrieves the priors, the likelihood process and computes the posterior probability.
-        '''
-    
-        xs = self.wls
-        ys = self.fluxes
-        errs = self.fluxerrs
-        
-        t = Table([xs, ys, errs])
-        t.sort(keys='col0')
-
-        xs = t['col0']
-        ys = t['col1']
-        errs = t['col2']
-        
-        if self.model == "BlackBody":
-            p0 = np.array([ self.initT1, self.initR1])
-            sigs = np.array([self.initT1*0.2, self.initR1*0.2])
-        elif self.model == "BlackBody_Av":
-            p0 = np.array([ self.initT1, self.initR1, self.av_host])
-            sigs = np.array([2000, 10, 0.5]) 
-        elif self.model == "BlackBody2":
-            p0 = np.array([ self.initT1, self.initR1, self.initT2, self.initR2])
-            sigs = np.array([self.initT1*0.2, self.initR1*0.2, self.initT2*0.2, self.initR2*0.2]) 
-        elif self.model == "BlackBody2_Av":
-            p0 = np.array([ self.initT1, self.initR1, self.av_host, self.initT2, self.initR2])
-            sigs = p0 * 0.2 
-        elif self.model == "BlackBody3_Av":
-            p0 = np.array([ self.initT1, self.initR1, self.av_host, self.initT2, self.initR2, self.initT3, self.initR3])
-            sigs = p0 * 0.4
-        elif self.model == "PowerLaw":
-            p0 = np.array([ self.alpha, self.scale, self.av_host])
-            sigs = np.array([2, 3, 2])
-        elif self.model == "PowerLaw_BlackBody":
-            p0 = np.array([ self.alpha, self.scale, self.initT1, self.initR1])
-            sigs = np.array([2, 3, 2000, 2])
-        elif self.model == "Disk":
-            p0 = np.array([ self.Mstar, self.Rstar, self.logMacc, self.R_out])
-            sigs = np.array([self.Mstar*0.5, self.Rstar*0.5, self.logMacc*0.5, self.R_out*0.5])
-            print ("Initialized with p0", p0, " and sigmas ", sigs)
-        else:
-            print ("-------------------CRITICAL ERROR!----------------------")
-            print ("-------------------UNKNOWN model! %s----------------------"%self.model)
-            print ("-------------------CRITICAL ERROR!----------------------")
-
-            sys.exit()
-            
-        ndim = len(p0)
-        
-        # emsemble MCMC
-        p0s = emcee.utils.sample_ball(p0, sigs, self.nwalkers)
-        # initialize the ball of initial conditions
-        #Supports the threads=X argument for parallelization		
-        sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self._logposterior,\
-            args=(xs, ys, errs), threads=int(self.nwalkers/2))
-        pos, lnprob, state = sampler.run_mcmc(p0s, self.burnin)
-        print ("Burning phase finished")
-        sampler.reset()
-        pos, lnprob, state = sampler.run_mcmc(pos, self.niterations)
-        print ('Acceptance ratio', sampler.acceptance_fraction)
-    
-        self.sampler = sampler
-
-        print ("MCMC main phase finished")
-        self._fill_output()
-        self._save_output()
-
-
+                print ("Saved fit as %s"%name)'''
         
     def plot_corner_posteriors(self, savefile=None):
         '''
