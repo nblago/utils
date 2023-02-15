@@ -303,7 +303,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     print_starlist : boolean (optional)
         Indicates if the starlist shall be printed in the standard output.
     telescope : str (optional)
-        The current two values accepted are "Keck", "P200", "Calar".
+        The current accepted values are "Keck", "P200", "Calar".
     directory : str (optional)
         The directory where the PDF with the finder chart shall be stored. 
         If no value given, the file will be store in the current directory where the script is run.
@@ -313,6 +313,9 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         The maximum magnitude (faintest) star that we would like to use as an offset star.
     mag : float or `None` (optional)
         The magnitude of our target.
+    image_file : str (optional)
+        The name of the fits file that you want to use as a background to your finder chart. If none, provided,
+        the script will automatically look for imaging catalogues: PS1 (North), SkyMapper (South), or DSS
     '''
         
     try:
