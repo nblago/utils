@@ -318,6 +318,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
         the script will automatically look for imaging catalogues: PS1 (North), SkyMapper (South), or DSS
     '''
         
+    print ("Got it")
     try:
         ra=float(ra)
         dec=float(dec)
@@ -356,7 +357,7 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     image[0].data[np.isnan(image[0].data)] = 0
 
 
-    plt.figure(figsize=(8,6))
+    plt.figure(figsize=(8, 6))
     plt.set_cmap('gray_r')
     smoothedimage = gaussian_filter(image[0].data, 1.1)
     
@@ -384,8 +385,8 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     plt.annotate("N", xy=((image[0].data.shape[0])-20, 40),  xycoords='data', xytext=(-4,5), textcoords='offset points')
     plt.annotate("E", xy=((image[0].data.shape[0])-40, 20),  xycoords='data', xytext=(-12,-5), textcoords='offset points')
 
-    ax.set_xlabel('%.1f\''%(rad*60))
-    ax.set_ylabel('%.1f\''%(rad*60))
+    ax.set_xlabel('%.1f\''%(rad*60*2))
+    ax.set_ylabel('%.1f\''%(rad*60*2))
     
 
     #Queries a catalogue to get the offset stars
