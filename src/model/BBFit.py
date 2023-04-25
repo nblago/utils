@@ -1538,7 +1538,8 @@ class BBFit:
                                       p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
             flux_end = self._model_2(lam, *params)
             
-
+            print ("LSQ parameters", params)
+            
             mask_lims = self.fluxerrs<0
             plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
             plt.plot(lam, flux_end, label="Best fit LSQ")
@@ -1550,6 +1551,7 @@ class BBFit:
             plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
             plt.legend()
             plt.yscale("log")
+            plt.xscale("log")
             name = self._get_save_path(None, "fluxes_obs_bb")
             plt.savefig(name, dpi=200)
             
