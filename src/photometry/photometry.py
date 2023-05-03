@@ -26,7 +26,6 @@ import matplotlib
 from matplotlib import pylab as plt
 import scipy.optimize as opt
 from scipy import stats
-import glob
 import warnings
 
 
@@ -43,6 +42,8 @@ except ImportError:
 #Personal code inputs
 from photometry import QueryCatalogue
 from photometry import sextractor
+#import QueryCatalogue
+#import sextractor
 
 from utils import fitsutils
 
@@ -123,7 +124,7 @@ class Photometry:
         self.gain_keyword = 'GAIN'
         self.pixscale_keyword = 'PIXSCALE'
         self.rdnoise_keyword = 'RDNOISE'
-        self.filter_keyword = 'FILTER'
+        self.filter_keyword = 'FILTER1'
         self.ext = 1
         self.minmag = 14
         self.maxmag = 20
@@ -1024,11 +1025,12 @@ class Photometry:
 
     
         #Extract the filter from extension 1
-        filt_original = fitsutils.get_par(imgfile, "FILTER", self.ext)
+        print ( imgfile, self.filter_keyword, self.ext)
+        filt_original = fitsutils.get_par(imgfile, self.filter_keyword, self.ext)
         filt = self.filter_dic.get(filt_original, filt_original)
         print ("Original FILTER: ", filt_original, ". New filter:", filt)
         if filt is None:
-            print ("Could not find the keyword FILTER in the header in extension %d."%self.ext)
+            print ("Could not find the keyword %s in the header in extension %d."%(self.filter_keyword, self.ext))
             print ("Please check that the extension you setected has data.")
             
     
@@ -1097,9 +1099,29 @@ class Photometry:
 
 
 def usage_case(f, ra, dec, n_try=0, max_tries=1):
+    '''
     
-    from urllib import request
-    
+    Shows how to use this module to get the photometry.
+
+    Parameters
+    ----------
+    f : String
+        File name.
+    ra : double
+        Right ascention.
+    dec : double
+        Declination.
+    n_try : int, optional
+        Number of the try. The default is 0.
+    max_tries : int, optional
+        Maximum number of tries. The default is 1.
+
+    Returns
+    -------
+    None.
+    Writes the data with the photometric measurements in the directory phot
+
+    '''    
     phot = Photometry()
     phot.minmag = 15
     phot.maxmag = 20

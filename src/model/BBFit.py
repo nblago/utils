@@ -138,17 +138,17 @@ class BBFit:
         self.scale_max = config['PowerLaw'].getfloat('scale_max')
         
         #Disk model
-        self.Mstar_min = config['PowerLaw'].getfloat('Mstar_min')
-        self.Mstar_max = config['PowerLaw'].getfloat('Mstar_max')
+        self.Mstar_min = config['Disk'].getfloat('Mstar_min')
+        self.Mstar_max = config['Disk'].getfloat('Mstar_max')
 
-        self.Rstar_min = config['PowerLaw'].getfloat('Rstar_min')
-        self.Rstar_max = config['PowerLaw'].getfloat('Rstar_max')
+        self.Rstar_min = config['Disk'].getfloat('Rstar_min')
+        self.Rstar_max = config['Disk'].getfloat('Rstar_max')
 
-        self.logMacc_min = config['PowerLaw'].getfloat('logMacc_min')
-        self.logMacc_max = config['PowerLaw'].getfloat('logMacc_max')
+        self.logMacc_min = config['Disk'].getfloat('logMacc_min')
+        self.logMacc_max = config['Disk'].getfloat('logMacc_max')
 
-        self.R_out_min = config['PowerLaw'].getfloat('R_out_min')
-        self.R_out_max = config['PowerLaw'].getfloat('R_out_max')
+        self.R_out_min = config['Disk'].getfloat('R_out_min')
+        self.R_out_max = config['Disk'].getfloat('R_out_max')
 
 
 
