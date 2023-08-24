@@ -94,7 +94,8 @@ class Photometry:
             'gmag':'g', 'rmag':'r', 'imag':'i', 'zmag':'z', 'ymag':'y',\
              'e_gmag':'dg', 'e_rmag':'dr', 'e_imag':'di', 'e_zmag':'dz', 'e_ymag':'dy',
              'j_m':'J',   'j_cmsig':'dJ', 'h_m':'H', 'h_cmsig':'dH', 'k_m':'K', 'k_cmsig':'dK', 'Ks':'K', 'Ks + clear':'K',
-             'SDSS-G': 'g', 'SDSS-R':'r', 'SDSS-I':'i', 'SDSS-Z':'z', 'MK-H':'H'}
+             'SDSS-G': 'g', 'SDSS-R':'r', 'SDSS-I':'i', 'SDSS-Z':'z', 'MK-H':'H', 'RG715':'I',
+             'RG630':'R', 'GG395':'B', 'OG590':'R'}
 
                         
         #Dictionary where we choose which other filter we require for zeropoint 

@@ -51,8 +51,8 @@ def hour2deg(ra, dec):
     Transforms string HH:MM:SS DD:MM:SS coordinates into degrees (floats).
     '''
     try:
-        ra = float(ra)
-        dec = float(dec)
+        ra = np.double(ra)
+        dec = np.double(dec)
         
     except:
         c = SkyCoord(ra, dec, frame='icrs', unit=(u.hourangle, u.deg))
@@ -95,7 +95,7 @@ def query_sky_mapper_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     mask = (catalog["class_star"]>0.7) * (catalog["ngood"] >5)  * (catalog['r_psf']>minmag) * (catalog['r_psf']<maxmag)
     catalog = catalog[mask]
     
-    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
+    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.double)])
     newcat["ra"] = catalog["raj2000"]
     newcat["dec"] = catalog["dej2000"]
     newcat["mag"] = catalog["r_psf"]
@@ -134,7 +134,7 @@ def query_ps1_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
     catalog = catalog[mask]
 
     
-    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
+    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.double)])
     newcat["ra"] = catalog["RaMean"]
     newcat["dec"] = catalog["DecMean"]
     newcat["mag"] = catalog["rMeanPSFMag"]
@@ -149,18 +149,20 @@ def query_gaia_catalogue(ra, dec, radius_deg, minmag=15, maxmag=18.5):
 
 
     query = '''SELECT ra, dec, phot_g_mean_mag
-                                    FROM gaiaedr3.gaia_source
+                                    FROM gaiadr3.gaia_source
                                     WHERE 1=CONTAINS(
                                       POINT('ICRS', %.6f, %.6f),
                                       CIRCLE('ICRS',ra, dec, %.6f))
-                                    AND phot_g_mean_mag>=%.2d AND phot_g_mean_mag<%.2f'''%(ra, dec, radius_deg, minmag, maxmag)
+                                    AND phot_g_mean_mag>=%.2f AND phot_g_mean_mag<%.2f'''%(ra, dec, radius_deg, minmag, maxmag)
     print (query)
     job = Gaia.launch_job_async(query)
                                     #, dump_to_file=True, output_format='votable')
 
     catalog = job.get_results()
 
-    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.float)])
+    print (catalog)
+    
+    newcat = np.zeros(len(catalog), dtype=[("ra", np.double), ("dec", np.double), ("mag", np.double)])
     newcat["ra"] = catalog["ra"]
     newcat["dec"] = catalog["dec"]
     newcat["mag"] = catalog["phot_g_mean_mag"]
@@ -245,8 +247,8 @@ def get_cutout(ra, dec, name, rad, debug=True):
     Obtains the color composite cutout from the PS1 images.
     '''
     try:
-        ra=float(ra)
-        dec=float(dec)
+        ra=np.double(ra)
+        dec=np.double(dec)
     except:
         ra, dec = hour2deg(ra, dec) 
         
@@ -279,20 +281,21 @@ def get_cutout(ra, dec, name, rad, debug=True):
     
     
 def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=True, \
-               telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan, image_file=None):
+               telescope="P200", directory=".", minmag=15, maxmag=18.5, mag=np.nan, image_file=None,
+               finder_ext="pdf"):
     '''
     Creates a PDF with the finder chart for the object with the specified name and coordinates.
     It queries the PS1 catalogue to obtain nearby offset stars and get an R-band image as background.
     
     Parameters
     ----------
-    ra : float
+    ra : double
         RA of our target in degrees.
-    dec : float
+    dec : double
         DEC of our target in degrees.
     name : str
         The name of your target
-    rad : float
+    rad : double
         Search radius for the finder in degrees.
     debug : bool (optional)
         Option to activate/ deactivate additional output.
@@ -307,21 +310,23 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     directory : str (optional)
         The directory where the PDF with the finder chart shall be stored. 
         If no value given, the file will be store in the current directory where the script is run.
-    minmag : float (optional)
+    minmag : double (optional)
         The minimum magnitud (brightest in this case) star that we would like to use as an offset star.
-    maxmag : float (optional)
+    maxmag : double (optional)
         The maximum magnitude (faintest) star that we would like to use as an offset star.
-    mag : float or `None` (optional)
+    mag : double or `None` (optional)
         The magnitude of our target.
     image_file : str (optional)
         The name of the fits file that you want to use as a background to your finder chart. If none, provided,
         the script will automatically look for imaging catalogues: PS1 (North), SkyMapper (South), or DSS
+    finder_ext : str (optional)
+        Extension of the finder file. By default is a PDF, but can be a PNG or JPG for example.
     '''
         
     print ("Got it")
     try:
-        ra=float(ra)
-        dec=float(dec)
+        ra=np.double(ra)
+        dec=np.double(dec)
     except:
         ra, dec = hour2deg(ra, dec) 
 
@@ -424,8 +429,8 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
     if (not catalog is None and len(catalog)>0):
         np.random.shuffle(catalog)
 
-        no_self_object = (np.abs(catalog["ra"]-ra)*np.cos(np.deg2rad(dec))>2./3600)*(np.abs(catalog["dec"]-dec)>2./3600)
-        catalog = catalog[no_self_object]
+        #no_self_object = (np.abs(catalog["ra"]-ra)*np.cos(np.deg2rad(dec))>1./3600)*(np.abs(catalog["dec"]-dec)>1./3600)
+        #catalog = catalog[no_self_object]
         #catalog.sort(order='mag')
 
     
@@ -433,9 +438,9 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
 
     
     if (len(catalog)>0):
-        ref1_pix = wcs.wcs_world2pix(np.array([[catalog["ra"][0], catalog["dec"][0]]], np.float_), 1)
+        ref1_pix = wcs.wcs_world2pix(np.array([[catalog["ra"][0], catalog["dec"][0]]], np.double), 1)
     if (len(catalog)>1):
-        ref2_pix = wcs.wcs_world2pix(np.array([[catalog["ra"][1], catalog["dec"][1]]], np.float_), 1)
+        ref2_pix = wcs.wcs_world2pix(np.array([[catalog["ra"][1], catalog["dec"][1]]], np.double), 1)
 
     # Mark and label reference stars
     #If we have 1, we mark it
@@ -558,8 +563,8 @@ def get_finder(ra, dec, name, rad, debug=False, starlist=None, print_starlist=Tr
             f.write('\n')   
             
     # Save to pdf
-    pylab.savefig(os.path.join(directory, str(name+'_finder.pdf')))
-    if debug: print ("Saved to %s"%os.path.join(directory, str(name+'_finder.pdf')))
+    pylab.savefig(os.path.join(directory, str(name+'_finder.%s'%finder_ext)))
+    if debug: print ("Saved to %s"%os.path.join(directory, str(name+'_finder.%s'%finder_ext)))
     pylab.close("all")
 
 if __name__ == '__main__':
@@ -582,11 +587,11 @@ if __name__ == '__main__':
     	print ("Not enough parameters given. Please, provide at least: finder_chart.py <RA> <Dec> <Name>")
     	sys.exit()
      
-    ra = float(sys.argv[1])
-    dec = float(sys.argv[2])
+    ra = np.double(sys.argv[1])
+    dec = np.double(sys.argv[2])
     name = str(sys.argv[3])
     if (len(sys.argv)>=5):
-        rad = float(sys.argv[4])
+        rad = np.double(sys.argv[4])
         if (rad > 15./60):
             print ('Requested search radius of %.2f arcmin is larger than 15 arcmin. Not sure why you need such a large finder chart... reducing to 10 armin for smoother operations...'%(rad * 60))
             rad = 10./60

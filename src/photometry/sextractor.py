@@ -17,6 +17,7 @@ SEXCONFIG = os.path.abspath(os.path.join(abspath, '../../config/daofind.sex'))
 if os.path.isfile(SEXCONFIG):
     print ('Found sextractor configuration file: %s'%SEXCONFIG)
 else:
+    print ('Did not find daofind.sex in %s'%SEXCONFIG)
     print ('Please, put the sextractor configuration file daofind.sex in: %s'%(os.path.dirname(SEXCONFIG)))
     print ('Otherwise, redefine the environmental variable SEXCONFIG to point to the location where daofind.sex is located.')
 
