@@ -108,6 +108,9 @@ class BBFit:
         
         print (configpath, config)
         
+        config_dict = {section: dict(config[section]) for section in config.sections()}
+        print(config_dict)
+    
         #Black body models priors
         self.T1_min = config['BlackBody'].getfloat('T1_min')
         self.T1_max = config['BlackBody'].getfloat('T1_max')
@@ -126,7 +129,11 @@ class BBFit:
         
         self.R3_min = config['BlackBody'].getfloat('R3_min')
         self.R3_max = config['BlackBody'].getfloat('R3_max')
-        
+
+
+        self.av_prior = config['BlackBody']['av_prior']
+        self.av_mean = config['BlackBody'].getfloat('av_mean')        
+        self.av_sigma = config['BlackBody'].getfloat('av_sigma')        
         self.av_min = config['BlackBody'].getfloat('av_min')
         self.av_max = config['BlackBody'].getfloat('av_max')
 
@@ -275,7 +282,13 @@ class BBFit:
                    "ps1,i":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/PAN-STARRS_PS1.i.dat"),
                    "ps1,z":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/PAN-STARRS_PS1.z.dat"),
                    "ps1,y":  os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/PAN-STARRS_PS1.y.dat"),
-                   "akari,irc,l18": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/AKARI_IRC.L18W.dat")
+                   "akari,irc,l18": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/AKARI_IRC.L18W.dat"),
+                   "blackgem,u": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/BlackGEM_u.dat"),
+                   "blackgem,g": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/BlackGEM_g.dat"),
+                   "blackgem,r": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/BlackGEM_r.dat"),
+                   "blackgem,i": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/BlackGEM_i.dat"),
+                   "blackgem,z": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/BlackGEM_z.dat"),
+                   "blackgem,q": os.path.join(os.environ['PYSYN_CDBS'], "comp/nonhst/BlackGEM_q.dat")
                    
 
            }
@@ -405,10 +418,9 @@ class BBFit:
             fluxes = np.append(fluxes, flux) 
             
             #Compute the error bars
-            flux_high = flux * 10**(0.4*me)
-            flux_low = flux * 10**(-0.4*me)
-            
-            fluxerr = np.append(fluxerr, np.average([flux - flux_low, flux_high-flux]))
+            err = 0.921 * flux * me
+            fluxerr = np.append(fluxerr, err)
+
 
         return wls, fluxes, fluxerr
     
@@ -460,7 +472,7 @@ class BBFit:
         R = (p[1] * u.Rsun).to(u.cm)
         a_v = p[2]
 
-        if a_v < 0:
+        if a_v < 0 or a_v > self.av_max:
             return lam * np.inf
             
         #Compute the effect of reddening as a flux factor
@@ -990,7 +1002,10 @@ class BBFit:
             else:
                 logp = stats.uniform.logpdf(T1, self.T1_min, self.T1_max)
                 logp = logp + stats.uniform.logpdf(R1, self.R1_min, self.R1_max)
-                logp = logp + stats.uniform.logpdf(av, self.av_min, self.av_max)
+                if self.av_prior=="uniform":
+                    logp = logp + stats.uniform.logpdf(av, self.av_min, self.av_max)
+                elif self.av_prior=="normal":
+                    logp = logp + stats.norm.logpdf(av, self.av_mean, self.av_sigma)
 
         elif self.model == "BlackBody2":
             T1 = p[0] 
@@ -1127,9 +1142,9 @@ class BBFit:
             self.Rerr1 = R - R1
             self.Rerr2 = R2 - R
             
-            self.L = self._get_bol_lum(T, R)
-            self.Lerr1 = self.L - self._get_bol_lum(T1, R1)
-            self.Lerr2 = self._get_bol_lum(T2, R2) - self.L
+            self.L1, self.L, self.L2 =  self._get_max_and_intervals(self._get_bol_lum(self.sampler.flatchain[:,0], self.sampler.flatchain[:,1]))
+            self.Lerr1 = self.L - self.L1
+            self.Lerr2 = self.L2 - self.L
             
             if self.model == "BlackBody_Av":
                 Av1, Av, Av2 = self._get_max_and_intervals(self.sampler.flatchain[:,2])
@@ -1493,7 +1508,7 @@ class BBFit:
         os.environ["OMP_NUM_THREADS"] = "1"
     
         #Parallelisation with Pool
-        with Pool() as pool:
+        '''with Pool() as pool:
             
             sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self._logposterior, args=(xs, ys, errs), pool=pool)
                 
@@ -1508,7 +1523,23 @@ class BBFit:
     
             print ("MCMC main phase finished")
             self._fill_output()
-            self._save_output()
+            self._save_output()'''
+            
+
+        sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self._logposterior, args=(xs, ys, errs))
+            
+        
+        pos, lnprob, state = sampler.run_mcmc(p0, self.burnin, progress=True)
+        print ("\nBurning phase finished")
+        sampler.reset()
+        pos, lnprob, state = sampler.run_mcmc(p0, self.niterations, progress=True)
+        print ('Acceptance ratio', sampler.acceptance_fraction)
+    
+        self.sampler = sampler
+
+        print ("MCMC main phase finished")
+        self._fill_output()
+        self._save_output()
 
 
     def plot_initial_guess(self):
@@ -1538,14 +1569,15 @@ class BBFit:
                                       p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
             flux_end = self._model_2(lam, *params)
             
-            print ("LSQ parameters", params)
+            lum = (4 * np.pi * (params[0] * u.K)**4 * (params[1]*u.Rsun)**2 * cnt.sigma_sb).to(u.Lsun)
+            print ("LSQ parameters", params, "Lsun, ", lum)
             
             mask_lims = self.fluxerrs<0
             plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
             plt.plot(lam, flux_end, label="Best fit LSQ")
-            plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=0, label="Measurements")
+            plt.errorbar(self.wls[~mask_lims], self.fluxes[~mask_lims], yerr=self.fluxerrs[~mask_lims], marker="o", color="b", lw=2, linestyle="none", label="Measurements")
             plt.errorbar(self.wls[mask_lims], self.fluxes[mask_lims], yerr=self.fluxes[mask_lims]*0.2, fmt="o", color="b", uplims=True)
-
+            plt.title("Teff: {:.1f}K, Radius: {:.1f} R_sun, Lum: {:.2e}".format(params[0], params[1], lum))
             plt.xlabel("Wavelength [A]")
             plt.ylabel("$F_{\\lambda}$ [erg/s/cm2/A]")
             plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
@@ -1598,31 +1630,32 @@ class BBFit:
             plt.savefig(name, dpi=200)
             print ('Plot stored as ', name)
                 
-        '''elif self.model == "BlackBody_Av":
-            flux_ini = self._model_av_r_2(lam, self.initT1, self.initR1, self.av_host)
+        elif self.model == "BlackBody_Av":
+            flux_ini = self._model_av_r_2(lam, self.initT1, self.initR1, self.av_mean)
 
-            p0 = (self.initT1, self.initR1, self.av_host)
+            p0 = (self.initT1, self.initR1, self.av_mean)
             
             print ("Initial ", p0)
             
-            #params, covar = curve_fit(self._model_av_r_2, self.wls , self.fluxes, \
-            #p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
-            #flux_end = self._model_av_r_2(lam, *params)
+            params, covar = curve_fit(self._model_av_r_2, self.wls , self.fluxes, \
+            p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
+            flux_end = self._model_av_r_2(lam, *params)
             
-            if plot:
-                plt.clf()
-                plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
-                #plt.plot(lam, flux_end, label="Best fit LSQ")
-                plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
-                plt.xlabel("Wavelength [A]")
-                plt.ylabel("$L_{\\lambda}$ [erg/s/A]")
-                #plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
-                plt.legend()
-                plt.yscale("log")  
-                name = self._get_save_path(None, "fluxes_obs_bb_av")
-                plt.savefig(name, dpi=200)
-                
-        elif self.model == "BlackBody2_Av":
+
+            plt.clf()
+            plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
+            plt.plot(lam, flux_end, label="Best fit LSQ")
+            plt.errorbar(self.wls, self.fluxes, yerr=self.fluxerrs, marker="o", lw=0, label="Measurements")
+            plt.xlabel("Wavelength [A]")
+            plt.ylabel("$L_{\\lambda}$ [erg/s/A]")
+            #plt.ylim(0.8*np.min(self.fluxes), 1.2*np.max(self.fluxes))
+            plt.legend()
+            plt.yscale("log")  
+            name = self._get_save_path(None, "fluxes_obs_bb_av")
+            plt.savefig(name, dpi=200)
+            print ('Plot stored as ', name)
+
+        '''elif self.model == "BlackBody2_Av":
             flux_ini = self._model2_av_r_2(lam, self.initT1, self.initR1, self.av_host, self.initT2, self.initR2)
 
             p0 = (self.initT1, self.initR1, self.av_host, self.initT2, self.initR2)
@@ -1790,7 +1823,7 @@ class BBFit:
         plt.figure(figsize=(8,8))
         fig = corner.corner(samples, labels=labels[0:ndim], quantiles=[0.16, 0.5, 0.84],
                        show_titles=True, title_kwargs={"fontsize": 12})
-        fig.suptitle("MJD: %.2f"%self.mjd)
+        fig.suptitle("MJD: %.2f"%self.mjd, horizontalalignment='left')
         name = self._get_save_path(savefile, "mcmc_posteriors")
         plt.savefig(name)
         plt.close("all")
@@ -1818,7 +1851,7 @@ class BBFit:
         Plots the best fit model to the data.
         '''
         
-        lam = np.linspace( np.min(self.wls) -1500 , np.max(self.wls) + 1500, 1000)
+        lam = np.linspace(np.min(self.wls)*0.9, np.max(self.wls)*1.1, 2000)
         
         plt.clf()
         plt.figure(figsize=(8,6))
