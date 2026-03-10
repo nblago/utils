@@ -374,11 +374,11 @@ class BBFit:
         log_lam = np.log10(lam_min) + (np.log10(lam_max) - np.log10(lam_min))*i/N
         lam = np.power(10, log_lam)
         
-        sp = ps.BlackBody(5000)
+        sp = ps.BlackBody(self.initT1)
         sp.convert('flam')
 
         #Scale it to the value provided by pysynphot
-        sp2 = self._model_2(lam, 5000, 1)
+        sp2 = self._model_2(lam, self.initT1, 1)
         sp2 = sp2 * np.max(sp.flux) / np.max(sp2)
         
         sp = ps.ArraySpectrum(lam, sp2)
@@ -1558,6 +1558,8 @@ class BBFit:
         
         if self.model == "BlackBody":
 
+            print ("Initial parameters from config file",self.T1_min, self.T1_max, self.R1_min, self.R1_max)
+
             p0 = ( np.average([self.T1_min, self.T1_max]), np.average([self.R1_min, self.R1_max]))
             
             flux_ini = self._model_2(lam, *p0)
@@ -1614,6 +1616,8 @@ class BBFit:
             
             
             plt.figure(figsize=(6,4))
+            plt.title("Teff1 {:.1f}K, R1: {:.1f} R_sun, L1: {:.2e}\nTeff1: {:.1f}K, R1: {:.1f} R_sun, L1: {:.2e}".format(params[0], params[1], L1, params[2], params[3], L2))
+
             plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
             plt.plot(lam, flux_end, label="Best fit LSQ")
             plt.plot(lam, flux_1, label="BB1")
@@ -1638,9 +1642,11 @@ class BBFit:
             print ("Initial ", p0)
             
             params, covar = curve_fit(self._model_av_r_2, self.wls , self.fluxes, \
-            p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
+                        p0 = p0, sigma=self.fluxerrs, absolute_sigma=True, maxfev = 20000)
+            print ("Params ", params)
             flux_end = self._model_av_r_2(lam, *params)
             
+
 
             plt.clf()
             plt.plot(lam, flux_ini, "r--", label="Fit initial parameters")
